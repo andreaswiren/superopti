@@ -17,7 +17,15 @@ try {
 } catch {$rows.Add(@('Unknown','Drive capacity','Unavailable','CIM query failed','Retry'))}
 try {
  $startup=@(Get-CimInstance Win32_StartupCommand -OperationTimeoutSec 5)
- $rows.Add(@('Info','Startup entries',"$($startup.Count) entries",'Count alone is not a fault; may include disabled entries','Startup apps'))
+ $rows.Add(@('Info','Startup entries',"$($startup.Count) entries",'Entries are listed below; review optional launchers','Startup apps'))
+ foreach($entry in $startup | Select-Object -First 16) {
+  $name = if($entry.Name){$entry.Name}else{'Unnamed'}
+  $command = if($entry.Command){$entry.Command}else{'Command unavailable'}
+  $known = $name -match '(?i)logi|logitech|logitune' -or $command -match '(?i)logi|logitech|logitune'
+  $state = if($known){'Review'}else{'Info'}
+  $target = if($known){'Known optional Logitech launcher; disable only if unused'}else{'Review publisher and need before disabling'}
+  $rows.Add(@($state,"Startup: $name",$command,$target,'Startup apps'))
+ }
 } catch {$rows.Add(@('Unknown','Startup entries','Unavailable','CIM query failed','Retry'))}
 $restart=(Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
 $rows.Add(@($(if($restart){'Warning'}else{'OK'}),'Servicing restart',$(if($restart){'Pending'}else{'No flag'}),'Not a full update check','Windows Update'))

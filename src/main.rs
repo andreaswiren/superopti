@@ -122,6 +122,7 @@ struct App {
     opacity: u8,
     full_rect: Option<WINDOWPLACEMENT>,
     action_status: String,
+    exclude_health_checks: bool,
     core_scroll: usize,
     reports: [model::Report; 7],
     scale: f64,
@@ -372,6 +373,13 @@ unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
             "Pressure score (0–100)\n\nA relative ranking clue, not proof that a process caused the slowdown. The score is the largest of:\n\n• CPU percentage\n• GPU percentage\n• RAM share × memory weight\n• Private commit / system commit limit × 100 × commit weight\n• min(100, I/O MiB/s × 2) × disk weight\n\nMemory and commit weights are 1 when their system usage reaches 85%, otherwise 0.2. Disk weight is 1 at 80% disk busy, otherwise 0.2. Missing measurements do not contribute; incomplete evidence can understate pressure.\n\nRAM is resident working-set memory. Commit is private committed memory, backed by RAM or the pagefile. Windows PagefileUsage reports commit, not actual swapped-out bytes. Per-process swap bytes are unavailable in this capture; commit minus RAM is not a valid swap measurement.",
             MB_OK | MB_ICONINFORMATION,
         );
+        return;
+    }
+    if id == 132 {
+        app.exclude_health_checks = !app.exclude_health_checks;
+        ui::layout(app, hwnd);
+        ui::update_report(app);
+        let _ = InvalidateRect(Some(hwnd), None, false);
         return;
     }
     if id == 190 {
@@ -1500,6 +1508,7 @@ fn main() {
             opacity: 100,
             full_rect: None,
             action_status: String::new(),
+            exclude_health_checks: false,
             core_scroll: 0,
             reports: std::array::from_fn(|_| model::Report::default()),
             scale,

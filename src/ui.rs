@@ -228,6 +228,7 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
     button(app, hwnd, 116, "Open process details", (382, 644, 170, 30));
     for (id, label, rect) in [
         (106, "Run system checks", (24, 218, 182, 36)),
+        (132, "Exclude optional checks", (594, 90, 182, 34)),
         (121, "Reduce animations", (24, 304, 170, 34)),
         (122, "Use Balanced power", (206, 304, 182, 34)),
         (130, "Set fixed pagefile", (400, 304, 182, 34)),
@@ -442,6 +443,31 @@ fn display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
         return std::borrow::Cow::Owned(report);
     }
 
+    if app.page == 1 && app.exclude_health_checks && !app.presentation.rows.is_empty() {
+        let mut report = app.presentation.clone();
+        report
+            .rows
+            .retain(|row| !matches!(row.first().map(String::as_str), Some("Optional" | "Review")));
+        if let Some(metric) = report
+            .metrics
+            .iter_mut()
+            .find(|m| m.label == "System health")
+        {
+            let penalty: i32 = report
+                .rows
+                .iter()
+                .map(|row| match row.first().map(String::as_str) {
+                    Some("Critical") => 25,
+                    Some("Blocked") => 20,
+                    Some("Warning") => 10,
+                    Some("Unknown") => 5,
+                    _ => 0,
+                })
+                .sum();
+            metric.value = format!("{}%", (100 - penalty).clamp(0, 100));
+        }
+        return std::borrow::Cow::Owned(report);
+    }
     if !app.presentation.title.is_empty()
         || !app.presentation.columns.is_empty()
         || !app.presentation.rows.is_empty()
@@ -586,7 +612,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 109 | 176 => app.page == 0,
                 210 | 211 | 110 | 116 => false,
                 201 => app.page == 0 && !app.history.is_empty(),
-                106 | 121..=130 => app.page == 1,
+                106 | 121..=130 | 132 => app.page == 1,
                 111..=114 => app.page == 2,
                 203 => app.page == 3 && !app.debug_view,
                 304 => matches!(app.page, 3 | 6),
@@ -670,6 +696,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                     }
                 }
                 106 => (x, 90, 170, 34),
+                132 => (x + 560, 90, 182, 34),
                 123 => (x + 182, 90, 174, 34),
                 124 => (x + 368, 90, 112, 34),
                 121 => (x + 16, 218, (content - 24) / 3 - 32, 32),
@@ -843,6 +870,14 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 } else {
                     "Debug view"
                 },
+            );
+        }
+        if id == 132 {
+            let _ = SendMessageW(
+                h,
+                BM_SETCHECK,
+                Some(WPARAM(if app.exclude_health_checks { 1 } else { 0 })),
+                None,
             );
         }
     }

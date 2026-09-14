@@ -349,6 +349,23 @@ pub fn check_report() -> crate::model::Report {
                 .count(),
         );
     }
+    let penalty: i32 = r
+        .rows
+        .iter()
+        .map(|row| match row.first().map(String::as_str) {
+            Some("Critical") => 25,
+            Some("Blocked") => 20,
+            Some("Warning") => 10,
+            Some("Unknown") => 5,
+            Some("Review") => 3,
+            Some("Optional") => 1,
+            _ => 0,
+        })
+        .sum();
+    r.metric(
+        "System health",
+        format!("{}%", (100 - penalty).clamp(0, 100)),
+    );
     r
 }
 pub fn autostart(enable: bool) -> Result<String, String> {
