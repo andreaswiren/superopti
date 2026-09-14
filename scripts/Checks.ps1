@@ -45,4 +45,14 @@ try {
  }
 }
 $rows.Add(@('Unknown','GPU throttling','Not measured by system checks','Requires supported device telemetry during capture','GPU capture details'))
+try {
+ $dev=@(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -match '(?i)wsl|vmmem|docker|com\.docker' })
+ if($dev.Count -gt 0) { $rows.Add(@('Info','WSL / Docker processes',"$($dev.Count) running",'Review container workloads when diagnosing sustained CPU, RAM or I/O pressure','Processes')) }
+ $devtools=@(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -match '(?i)^node$|npm|yarn|pnpm|vite|webpack|react' })
+ foreach($p in $devtools | Sort-Object StartTime | Select-Object -First 12) {
+  $age=[math]::Round(((Get-Date)-$p.StartTime).TotalHours,1)
+  $state=if($age -ge 4){'Review'}else{'Info'}
+  $rows.Add(@($state,"Dev process: $($p.ProcessName)","PID $($p.Id); $age h",'Long-lived development workers can remain after tests; stop only when confirmed idle','Processes'))
+ }
+} catch {$rows.Add(@('Unknown','Container / dev processes','Unavailable','Process query failed','Retry'))}
 ConvertTo-Json -InputObject @($rows.ToArray()) -Depth 4 -Compress

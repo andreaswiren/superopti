@@ -231,7 +231,14 @@ pub fn undo() -> Result<String, String> {
 pub fn check_report() -> crate::model::Report {
     let mut r = crate::model::Report::new(
         "System checks",
-        &["Status", "Check", "Current", "Target / context", "Action"],
+        &[
+            "Status",
+            "Check",
+            "Current",
+            "Target / context",
+            "Action",
+            "Impact",
+        ],
     );
     match animation() {
         Ok(enabled) => r.row(&[
@@ -320,6 +327,22 @@ pub fn check_report() -> crate::model::Report {
             }
         }
         Err(e) => r.row(&["Unknown", "Pagefile", "Unavailable", &e, "Retry"]),
+    }
+    for row in &mut r.rows {
+        let impact = if row
+            .iter()
+            .any(|v| v.contains("pagefile") || v.contains("Pagefile"))
+            || row
+                .first()
+                .is_some_and(|v| v == "Critical" || v == "Blocked")
+        {
+            "High"
+        } else if row.first().is_some_and(|v| v == "Warning" || v == "Review") {
+            "Medium"
+        } else {
+            "Low"
+        };
+        row.push(impact.into());
     }
     // Put actionable deviations first; optional appearance preferences do not
     // outrank low disk space or a blocked pagefile change.

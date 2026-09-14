@@ -477,7 +477,17 @@ fn display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
     }
     let mut report = match app.page {
         0 => model::Report::new("Capture status", &["Status", "Action"]),
-        1 => model::Report::new("System checks", &["Status", "Check", "Value", "Action"]),
+        1 => model::Report::new(
+            "System checks",
+            &[
+                "Status",
+                "Check",
+                "Value",
+                "Target / context",
+                "Action",
+                "Impact",
+            ],
+        ),
         2 => model::Report::new("Preferences", &["Setting", "Status", "Action"]),
         3 => model::Report::new(
             "Process snapshot",
