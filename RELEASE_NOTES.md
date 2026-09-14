@@ -1,9 +1,11 @@
-# Initial native Windows preview
+# SuperOpti 0.2.0 preview
 
-- Rust/windows-rs tray app, idle until requested; 2/5/15-minute captures with 2/5-second intervals. Native core metrics remain responsive when optional counter providers stall; Stop and deadlines close every capture helper.
-- CPU, RAM, GPU-engine, disk, commit and pagefile graphs; top-10 heuristic process rankings with CPU, working set, I/O, threads and handles.
-- On-demand thread snapshot, system checks, local JSON export, two reversible fixes and Undo.
-- Current-user install/uninstall and optional idle tray autostart.
+Native Rust/windows-rs diagnostics with a professional redesigned interface, original icons and double-click process details.
 
-Download and extract **SuperOpti-windows-x64.zip**. Run the executable directly or use **Install for me**. Read the bundled README for metric definitions and limitations. Preview binaries are unsigned. GPU counters depend on the driver. Rankings suggest contributors; they do not establish causation.
+- On-demand graphs/top-10 contributors; no continuous idle sampling.
+- Focused CPU/memory/handles/threads, read/write I/O, IPv4/IPv6 TCP endpoints, UDP local sockets and explicit TCP IN/OUT measurement.
+- Fixed pagefile: max(50% installed RAM,16 GiB), initial=max, disk guard, admin-only apply, restart notice and Undo. Included in Fix all.
+- Complete Cargo CycloneDX inventory, archive hashes/licenses, Rust/runtime metadata, schema validation and audit per release.
+- Changelog, private reporting and CRA evidence for individual non-commercial MIT distribution.
 
+Extract **SuperOpti-windows-x64.zip**, then run portable or install for the current user. Read README/VALIDATION. Binaries are unsigned previews. TCP measurements are lower bounds and may need administrator rights; UDP/QUIC remote peers/per-peer bytes are not implemented. Fixed pagefiles limit commit/dump capacity. CRA documents are a scope assessment and engineering evidence, not certification.

@@ -53,11 +53,17 @@ struct Capture {
 }
 impl Drop for Capture {
     fn drop(&mut self) {
+        metrics::trace("Capture drop begin");
         let _ = self.cancel.send(());
         for child in &mut self.children {
+            metrics::trace(&format!("Kill {}", child.id()));
             let _ = child.kill();
-            let _ = child.wait();
         }
+        // TerminateProcess stops every thread immediately but Windows may take seconds
+        // cancelling a driver's pending I/O. Do not block the command coordinator on
+        // process-object retirement. Dropping Child releases its Windows handles;
+        // kill-on-close Job ownership supplies an additional termination boundary.
+        metrics::trace("Capture drop end");
     }
 }
 fn emit(hwnd: usize, tx: &Sender<Event>, event: Event) {
@@ -129,7 +135,36 @@ pub fn worker(
                 Command::Checks => actions::checks(),
                 Command::Fix(n) => actions::fix(n).unwrap_or_else(|e| e),
                 Command::Undo => actions::undo().unwrap_or_else(|e| e),
-                Command::Threads(pid) => thread_probe(pid),
+                Command::Threads(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(pid, thread_probe(pid, created)),
+                    );
+                    continue;
+                }
+                Command::Details(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(
+                            pid,
+                            crate::native::process_report(pid, created).unwrap_or_else(|e| e),
+                        ),
+                    );
+                    continue;
+                }
+                Command::Network(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(
+                            pid,
+                            crate::network::measure(pid, created).unwrap_or_else(|e| e),
+                        ),
+                    );
+                    continue;
+                }
                 Command::Auto(b) => actions::autostart(b).unwrap_or_else(|e| e),
                 Command::Install => actions::install().unwrap_or_else(|e| e),
                 Command::Quit => break,
@@ -157,6 +192,7 @@ pub fn worker(
                         step,
                         _job: job,
                     };
+                    metrics::trace("Capture launch begin");
                     for group in ["core", "extra", "disk", "gpu", "network"] {
                         c.children.push(launch(
                             group,
@@ -167,10 +203,12 @@ pub fn worker(
                             &c._job,
                         )?);
                     }
+                    metrics::trace("Capture launch end");
                     let notify = commands.clone();
                     let id = generation;
+                    let remaining = Duration::from_secs(seconds).saturating_sub(c.start.elapsed());
                     std::thread::spawn(move || {
-                        if timer.recv_timeout(Duration::from_secs(seconds)).is_err() {
+                        if timer.recv_timeout(remaining).is_err() {
                             let _ = notify.send(Command::Deadline(id));
                         }
                     });
@@ -202,11 +240,12 @@ pub fn worker(
                     hwnd,
                     &events,
                     Event::Stopped(
-                        "IDLE  /  Capture stopped. All collector processes closed.".into(),
+                        "IDLE  /  Sampling stopped; Windows may finish pending I/O cleanup.".into(),
                     ),
                 );
             }
             Command::Deadline(id) if id == generation => {
+                metrics::trace("Deadline received");
                 capture = None;
                 generation += 1;
                 emit(
@@ -338,8 +377,9 @@ pub fn collector(group: &str, seconds: u64, step: u64) {
         let _ = send(Event::Report(e));
     }
 }
-fn thread_probe(pid: u32) -> String {
+fn thread_probe(pid: u32, expected: Option<u64>) -> String {
     let result = (|| -> Result<String, String> {
+        let _identity = crate::native::ProcessIdentity::open(pid, expected)?;
         let job = Job::new()?;
         let mut child = ProcessCommand::new(std::env::current_exe().map_err(|e| e.to_string())?)
             .args(["--thread-probe", &pid.to_string()])

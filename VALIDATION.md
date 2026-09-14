@@ -1,18 +1,24 @@
-# Validation of the initial preview
+# Validation evidence
 
-Local Windows 11 x64 validation, 2026-09-14:
+SuperOpti 0.2.0 preview, Windows 11 x64, 2026-09-14. These observations apply to the local validation build; release CI independently repeats automated gates against the published commit.
 
-- `cargo fmt --all -- --check`: passed.
-- `cargo clippy --locked --all-targets -- -D warnings`: passed.
-- `cargo test --locked`: 3 tests passed (GPU engine identity, pressure weighting, missing data).
-- Optimized release build and native `--smoke-test`: passed.
-- Native snapshot: 504 processes in 12.97 ms in this run. This measures core collection, not all helper overhead.
-- Real 10-second capture completed in 10,034 ms. Manual Stop during provider initialization completed in 5 ms. No events arrived after Stop during the idle assertion. All capture helpers exited.
-- GPU, pagefile and network data arrived independently while the local disk performance provider was slow. An earlier combined query confirmed disk counters but took too long; provider isolation was introduced in response. Missing/delayed optional readings remain N/A.
-- Native thread snapshot returned thread IDs, CPU splits, base priorities and exit state.
-- Release executable: 614,400 bytes.
-- Tray idle observation: 20.01 seconds, 0.0 additional process CPU seconds at Windows accounting resolution, 13,357,056-byte working set, 152 handles, zero child collectors. A short observation is not a guarantee of zero overhead on all systems.
-- Installer and uninstaller PowerShell scripts parsed without errors. Actual installation/uninstallation, autostart persistence across sign-in, fixes and Undo have not been executed on the user's system as part of validation.
-- The native window launched. Visual/interactive QA was interrupted when the user stopped computer use; full UI verification remains outstanding.
+## Passed
 
-No process-name capture files, host diagnostics, credentials or personal environment exports are committed or included in release assets. The GitHub workflow independently repeats formatting, lint, unit tests, build and the native lifecycle smoke test before publishing each build.
+- Pinned Rust 1.97.1: formatting, clippy all-targets with warnings denied, seven Rust tests (ranking/missing metrics, GPU identity, endpoint byte order/live loopback listener, process identity mismatch rejection, readable focused process counters).
+- Pagefile PowerShell parser and seven pure sizing/unknown-memory cases. Read-only live preview detected 64 GiB installed RAM and proposed 32 GiB initial=max. Disk-space guard rejected the proposed change on this machine. No pagefile settings were changed.
+- Optimized build with embedded icons, asInvoker/system-DPI manifest and 0.2.0 version resources: 767,488-byte EXE.
+- Native snapshot: 471 processes in 11.4122 ms. This measures core collection, not all helper overhead.
+- Real capture stopped automatically in 10,002 ms. Immediate manual Stop measured 0 ms at integer-millisecond resolution. No subsequent sample events during the idle assertion. Native thread report returned successfully.
+- A shutdown regression initially failed at about 13 seconds: Windows disk-provider I/O cancellation delayed process retirement. The coordinator now terminates all helper threads without synchronously waiting for pending driver I/O; startup time counts toward the deadline. Windows may briefly retain terminating process objects. The test passed after this correction.
+- Idle tray observation after startup: 20.23 seconds, 0.0 additional CPU seconds at Windows accounting resolution, 15,032,320-byte working set, 159 handles, zero child processes. This short observation does not guarantee zero overhead on all systems.
+- CycloneDX 1.5 schema/reference validation: all 23 Cargo dependencies matched Cargo.lock and cached archive SHA-256 hashes; 20 direct PE imports inventoried. Upstream licenses, Rust library copyright/license texts and sysroot input hashes included.
+- cargo-audit 0.22.2: zero reported vulnerabilities, empty warnings, 1,246-advisory RustSec database at revision e2e640471715167f73e22eaf761f2e547adafeec. This is time-bounded known-advisory evidence, not proof of no vulnerabilities.
+
+## Not yet validated
+
+- The native window launched. Desktop automation failed with `window id 136196 was not found`; refreshing target selection returned the same stale binding. Full visual/interactive QA, double-click/Enter behavior, compact layout, 150/200% scaling, Narrator/high contrast and light/dark tray visibility remain manual checklist items in docs/UX_DESIGN.md.
+- Administrator pagefile Apply/rollback/reboot/Undo, install/update/uninstall and autostart across sign-in were not exercised on the user's workstation. Validate in disposable Windows VMs before relying on these paths in managed deployments.
+- Successful privileged TCP byte measurement against a controlled known-byte transfer, abrupt-connection cleanup and third-party EStats coexistence remain untested. Native endpoint enumeration/decoding is tested. UDP/QUIC remote peer and byte accounting is not implemented.
+- No independent penetration test, signed-binary verification, high-core-count hardware matrix or formal performance/accessibility certification.
+
+No captures, host process listings, private endpoints, traces or credentials are committed or packaged. Release CI gates publication on format, lint, tests, build, SBOM validation, advisory audit, pagefile sizing tests and native capture smoke test. Private GitHub vulnerability reporting is enabled.

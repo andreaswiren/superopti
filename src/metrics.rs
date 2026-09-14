@@ -16,7 +16,7 @@ pub fn now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
-fn trace(message: &str) {
+pub(crate) fn trace(message: &str) {
     if let Some(path) = std::env::var_os("SUPEROPTI_TRACE") {
         use std::io::Write;
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -149,6 +149,8 @@ impl Drop for Query {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Process {
+    #[serde(default)]
+    pub created_ticks: Option<u64>,
     pub pid: u32,
     pub name: String,
     pub cpu: Option<f64>,

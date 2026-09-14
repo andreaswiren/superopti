@@ -12,27 +12,25 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Prepare Rust toolchain
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Prepare pinned tools
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
-          rustup component add rustfmt clippy
+          rustup show
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
+          cargo install cargo-audit --version 0.22.2 --locked
+          python -m pip install -r scripts/requirements-sbom.txt
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Unit tests
         run: cargo test --locked
-      - name: Build and package
+      - name: Build, inventory, audit, smoke test and package
         shell: pwsh
         run: ./scripts/Build.ps1
-      - name: Smoke test native capture and cancellation
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force work | Out-Null
-          $p = Start-Process ./dist/superopti.exe -ArgumentList "--smoke-test", "work/smoke-result.json" -WindowStyle Hidden -PassThru -Wait
-          if ($p.ExitCode -ne 0) { throw "Native smoke test failed. See work/smoke-result.json" }
       - name: Release this build
         shell: pwsh
         env:
@@ -40,6 +38,5 @@ jobs:
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches.Groups[1].Value
           $tag = "v$version-build.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
-          gh release create $tag dist/superopti.exe dist/SuperOpti-windows-x64.zip dist/SHA256SUMS.txt --target $env:GITHUB_SHA --title "SuperOpti $version - build $env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT" --notes-file RELEASE_NOTES.md --prerelease
+          gh release create $tag dist/superopti.exe dist/SuperOpti-windows-x64.zip dist/SuperOpti-SBOM.zip dist/SuperOpti-CRA-docs.zip dist/superopti.cdx.json dist/inventory.json dist/SHA256SUMS.txt --target $env:GITHUB_SHA --title "SuperOpti $version - build $env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT" --notes-file RELEASE_NOTES.md --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
-

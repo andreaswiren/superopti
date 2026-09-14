@@ -1,6 +1,8 @@
 # SuperOpti
 
-A native Rust + windows-rs Windows tray app for short, on-demand performance investigations. No webview, browser engine, background service, scheduled sampler, telemetry or network upload. Windows 10/11 x64; GPU counters require a compatible WDDM driver. This is an initial preview.
+<img src="assets/superopti.png" alt="SuperOpti pulse icon" width="96" height="96">
+
+A native Rust + windows-rs Windows tray app for short, on-demand performance investigations. No webview, browser engine, background service, scheduled sampler, telemetry or network upload. Windows 10/11 x64; GPU counters require a compatible WDDM driver. This is a preview. [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [SBOM](sbom/INVENTORY.md) · [CRA documentation](docs/cra/README.md).
 
 ## Run and install
 
@@ -15,10 +17,10 @@ Exit the installed app before updating or uninstalling it. Uninstall using Windo
 1. Open the tray icon when the machine feels slow.
 2. Choose 2, 5 or 15 minutes. The default interval is 2 seconds; enable **5s interval** to sample less often. The first interval warms rate counters.
 3. Follow CPU, RAM, GPU, aggregate disk busy, commit and pagefile graphs. The displayed trend spans the last two minutes and uses a 0–100% scale.
-4. Review the live top 10 likely contributing processes. Enter a PID and choose **Inspect threads** for a separate 2-second snapshot of its 40 busiest readable threads, kernel/user CPU split, base priorities and exit status.
+4. Double-click a contributor (or select and press Enter) for Process details. Refresh CPU/memory/handles, inspect threads, or measure TCP traffic for 10 seconds. Selection tracks creation time to avoid following a reused PID.
 5. Stop early or let the capture stop automatically. **Export JSON** saves the current session to `%LOCALAPPDATA%\SuperOpti\captures`. A new capture replaces the previous in-memory session after confirmation. Nothing is saved unless exported.
 
-Sampling stops on completion, Stop, or Exit. While idle the worker blocks on a channel and the GUI blocks on the Win32 message loop: no monitoring timer, polling loop, periodic log writes, or continuous rendering. During monitoring, a native core collector and four optional provider collectors run as hidden child processes; GDI graphs repaint on samples and normal window events. At most 900 samples are retained. System checks run only when requested and may briefly add overhead through Windows CIM/PowerShell. Thread inspection enumerates threads once, opens only those owned by the chosen PID and measures their CPU times over two seconds. It runs in a separate helper with a 12-second timeout. Checks and fixes run serially on a separate action worker; PowerShell commands have a 30-second timeout. The capture coordinator remains responsive during these actions. A watchdog enforces the capture deadline even when a Windows counter provider stalls. Windows Job Objects close all collector processes on Stop, completion, Exit or application termination. No collectors remain resident while idle. Optional metrics may take longer to initialize and become N/A when their last reading is older than max(15 seconds, 3 sample intervals).
+Sampling stops on completion, Stop, or Exit. While idle the worker blocks on a channel and the GUI blocks on the Win32 message loop: no monitoring timer, polling loop, periodic log writes, or continuous rendering. During monitoring, a native core collector and four optional provider collectors run as hidden child processes; GDI graphs repaint on samples and normal window events. At most 900 samples are retained. System checks run only when requested and may briefly add overhead through Windows CIM/PowerShell. Thread inspection enumerates threads once, opens only those owned by the chosen PID and measures their CPU times over two seconds. It runs in a separate helper with a 12-second timeout. Checks and fixes run serially on a separate action worker; PowerShell commands have a 30-second timeout. The capture coordinator remains responsive during these actions. A watchdog enforces the capture deadline even when a Windows counter provider stalls. Owned helper processes are terminated on Stop, completion and Exit; kill-on-close Windows Job Objects also enforce cleanup on application termination. The command coordinator does not wait for slow driver I/O cancellation. No active samplers remain while idle; terminated helper process objects may briefly remain while Windows cancels pending driver I/O. Optional metrics may take longer to initialize and become N/A when their last reading is older than max(15 seconds, 3 sample intervals).
 
 ## Interpreting the data
 
@@ -34,12 +36,23 @@ Sampling stops on completion, Stop, or Exit. While idle the worker blocks on a c
 
 **System checks** reviews fixed-drive free space (15% is a review threshold, not a universal requirement), pagefile management, startup entries, servicing restart flags, uptime, the current power plan, and client-area animations. Unknown results are identified explicitly. It does not scan files or run a stress test.
 
-Two direct actions are implemented, individually and through **Fix all (2 fixes)**:
+Three actions are available individually and through **Fix all (3 settings)**:
 
-- Disable client-area animations with SystemParametersInfoW; optional, affects appearance, potentially small performance benefit.
-- Change the standard Power saver plan to Balanced only if Power saver is currently active; may use more energy. Custom/high-performance plans are preserved. Windows power-mode overlays need manual review.
+- Disable client-area animations; optional, with potentially small performance benefit.
+- Switch the standard Power saver plan to Balanced only when active; may use more energy. Other plans are preserved.
+- Set **initial = maximum = max(50% installed physical RAM,16 GiB)**, rounded up to MiB. Examples: 16/32 GiB RAM → 16 GiB pagefile; 64 GiB → 32 GiB; 128 GiB → 64 GiB. Checks preview size, configured/running allocation and disk eligibility. Retains one existing location, refuses multiple/custom layouts, and reserves room for growth plus max(2 GiB,5% volume). Requires administrator rights and restart; neither occurs automatically. Windows swapfile.sys is separate.
 
-The confirmation describes the concrete changes. Original values are saved before mutation to `%LOCALAPPDATA%\SuperOpti\fix-backup.json`; **Undo fixes** restores them. Fix all reports each result, including failures. Policy restrictions can prevent changes. Storage, startup, updates, virtual memory and power settings buttons open Windows controls for choices requiring human judgment. Fix all does not delete files, disable security/services/pagefiles, terminate processes, install updates, reboot, or make arbitrary registry performance tweaks.
+Fixes require confirmation and report each result. Animation/power originals are saved in `%LOCALAPPDATA%\SuperOpti\fix-backup.json`; pagefile originals under `HKLM\SOFTWARE\SuperOpti`. **Undo fixes** restores them; pagefile restore requires restart. Fixed sizing is the selected policy, not a universal optimum: it limits commit headroom and can prevent complete crash dumps. [Microsoft sizing guidance](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/how-to-determine-the-appropriate-page-file-size-for-64-bit-versions-of-windows).
+
+Storage/startup/update buttons open Windows settings for manual review. Fix all does not delete files, disable security/services, terminate processes, install updates or reboot.
+
+## Process and network details
+
+Focused reports include path/creation/parent identity, user/kernel CPU, working/private/peak memory, handles, threads, and separate READ/IN and WRITE/OUT I/O totals and rates. Process I/O includes files, network and devices; it is not TCP-only.
+
+TCP rows show numeric local/remote addresses and ports, state, and incoming/outgoing payload bytes where EStats is already enabled. **Measure TCP (10s)** temporarily enables counters for up to 256 established connections and may require Run as administrator. It polls once per second and restores counters it enabled. Per-connection/aggregate IN/OUT deltas are lower bounds: short flows and closing bytes can be missed. Counters include retransmissions, exclude headers, and cannot reconstruct history. Crash/forced termination may prevent cleanup until connections close.
+
+**UDP/QUIC remote peers and per-peer bytes are unavailable.** UDP rows show local sockets only. No reverse DNS, packet payload capture or external upload occurs. Endpoints are not proof of domain ownership, intent or malicious activity. Details do not activate continuous background tracing.
 
 ## Development and release policy
 
@@ -53,9 +66,9 @@ cargo test --locked
 ./target/release/superopti.exe --smoke-test work/smoke-result.json
 ```
 
-Requires a current Rust MSVC toolchain and Visual Studio C++ build tools/Windows SDK. `windows` 0.62.2 is the only OS/UI framework; serde handles local JSON. Cargo.lock pins dependency resolution. The native app uses unsafe Win32 calls at the FFI boundary, owned process/query handles, and Windows Job Objects for cleanup. The smoke test checks native counters, a real 10-second capture deadline, immediate cancellation during provider initialization, no events while idle, and native thread inspection. Set SUPEROPTI_TRACE to a local file path only when debugging PDH initialization; normal operation writes no such log.
+Requires Rust 1.97.1 (rust-toolchain.toml), Python 3.12 (`pip install -r scripts/requirements-sbom.txt`), `cargo install cargo-cyclonedx --version 0.5.9 --locked`, `cargo install cargo-audit --version 0.22.2 --locked`, an MSVC toolchain and Visual Studio C++ build tools/Windows SDK. `windows` 0.62.2 is the only OS/UI framework; serde handles local JSON. Cargo.lock pins dependency resolution. The native app uses unsafe Win32 calls at the FFI boundary, owned process/query handles, and Windows Job Objects for cleanup. The smoke test checks native counters, a real 10-second capture deadline, immediate cancellation during provider initialization, no events while idle, and native thread inspection. Set SUPEROPTI_TRACE to a local file path only when debugging PDH initialization; normal operation writes no such log.
 
-Commit and push every completed, validated change to `main`. Each push (or manual workflow run) checks formatting, lint and tests, builds the Windows x64 distribution, and publishes a uniquely tagged preview release with EXE, ZIP installer bundle and SHA-256 checksums. Failed pipelines publish no release. The build workflow is the release build authority; local intermediate compiler/test iterations are not separate published products. No force-push is needed. Release artifacts do not contain diagnostic captures.
+Commit and push every completed, validated change to `main`. Each push (or manual workflow run) checks formatting, lint and tests, builds the Windows x64 distribution, and publishes a uniquely tagged preview release with EXE, installer ZIP, CycloneDX inventory, SBOM/license/audit and CRA bundles, and SHA-256 checksums. Failed pipelines publish no release. The build workflow is the release build authority; local intermediate compiler/test iterations are not separate published products. No force-push is needed. Release artifacts do not contain diagnostic captures.
 
 ## References
 
@@ -64,3 +77,9 @@ Commit and push every completed, validated change to `main`. Each push (or manua
 - [Microsoft: Windows performance improvement guidance](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows)
 - [windows-rs](https://github.com/microsoft/windows-rs)
 
+
+## Inventory and CRA scope
+
+[Inventory](sbom/INVENTORY.md) covers every locked transitive/build/proc-macro Cargo package, relationships, verified archive hashes and license texts. Release evidence adds binary hash, Rust toolchain/standard library and direct Windows PE imports. CycloneDX 1.5 matches the pinned generator and is validated with its official vendored schema. OS-internal transitive components vary by environment; this boundary is explicit and overall composition is marked incomplete. A clean audit is not proof of no vulnerabilities.
+
+The maintainer declares individual non-commercial MIT distribution. [CRA documentation](docs/cra/README.md) records conditional scope, technical evidence, requirements mapping, risks and gaps. It does not assert certification or CE marking. [Private security reporting](https://github.com/andreaswiren/superopti/security/advisories/new) is enabled.

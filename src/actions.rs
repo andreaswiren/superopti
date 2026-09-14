@@ -19,7 +19,16 @@ pub fn data_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("SuperOpti")
 }
 pub fn ps(script: &str) -> Result<String, String> {
-    let mut child = Command::new("powershell.exe")
+    let mut system = [0u16; 32768];
+    let length = unsafe {
+        windows::Win32::System::SystemInformation::GetSystemDirectoryW(Some(&mut system))
+    } as usize;
+    if length == 0 || length >= system.len() {
+        return Err("Windows system directory unavailable".into());
+    }
+    let executable = PathBuf::from(String::from_utf16_lossy(&system[..length]))
+        .join("WindowsPowerShell/v1.0/powershell.exe");
+    let mut child = Command::new(executable)
         .args([
             "-NoLogo",
             "-NoProfile",
@@ -32,17 +41,27 @@ pub fn ps(script: &str) -> Result<String, String> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+    fn drain(mut pipe: impl Read) -> String {
+        let mut saved = Vec::new();
+        let mut chunk = [0u8; 4096];
+        while let Ok(count) = pipe.read(&mut chunk) {
+            if count == 0 {
+                break;
+            }
+            let keep = count.min(131072usize.saturating_sub(saved.len()));
+            saved.extend_from_slice(&chunk[..keep]);
+        }
+        String::from_utf8_lossy(&saved).into_owned()
+    }
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let output = std::thread::spawn(move || drain(stdout));
+    let errors = std::thread::spawn(move || drain(stderr));
     let start = Instant::now();
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            let mut out = String::new();
-            let mut err = String::new();
-            if let Some(mut pipe) = child.stdout.take() {
-                let _ = pipe.read_to_string(&mut out);
-            }
-            if let Some(mut pipe) = child.stderr.take() {
-                let _ = pipe.read_to_string(&mut err);
-            }
+            let out = output.join().unwrap_or_default();
+            let err = errors.join().unwrap_or_default();
             return if status.success() {
                 Ok(out.trim().into())
             } else {
@@ -167,6 +186,9 @@ pub fn fix(which: u32) -> Result<String, String> {
         })();
         log.push(result.unwrap_or_else(|e| format!("Power fix failed: {e}")));
     }
+    if which == 4 || which == 3 {
+        log.push(pagefile("Apply").unwrap_or_else(|e| format!("Pagefile fix failed: {e}")));
+    }
     Ok(log.join("\r\n"))
 }
 pub fn undo() -> Result<String, String> {
@@ -199,6 +221,7 @@ pub fn undo() -> Result<String, String> {
             Err(e) => results.push(format!("Power restore failed: {e}")),
         }
     }
+    results.push(pagefile("Undo").unwrap_or_else(|e| format!("Pagefile restore failed: {e}")));
     save_backup(&b)?;
     if results.is_empty() {
         results.push("No saved changes to undo.".into());
@@ -231,10 +254,6 @@ try {
  }
 } catch { 'UNKNOWN: Free disk space could not be queried.' }
 try {
- $c=Get-CimInstance Win32_ComputerSystem -OperationTimeoutSec 5
- if($c.AutomaticManagedPagefile){'OK: System-managed pagefile enabled.'}else{'REVIEW: Pagefile is manually managed. Review Virtual memory; do not disable paging to reduce disk activity.'}
-} catch { 'UNKNOWN: Pagefile policy unavailable.' }
-try {
  $s=@(Get-CimInstance Win32_StartupCommand -OperationTimeoutSec 5)
  "REVIEW: $($s.Count) startup entries found (includes entries that may be disabled). Use Startup apps to choose what is needed."
 } catch { 'UNKNOWN: Startup entries unavailable.' }
@@ -246,10 +265,13 @@ try {
 } catch { 'UNKNOWN: Uptime unavailable.' }
 "#;
     format!(
-        "SYSTEM CHECKS / on demand\r\n\r\n{anim}\r\n\r\n{power}\r\n\r\n{}\r\n\r\nFix all applies ONLY the two reversible fixes above when applicable.\r\nStorage, startup, updates and paging require your choices in Windows.\r\nNo processes are terminated and no services, security features or pagefiles are disabled.",
-        ps(script)
-            .unwrap_or_else(|e| format!("Checks failed: {e}"))
-            .replace('\n', "\r\n")
+        "SYSTEM CHECKS / on demand\r\n\r\n{anim}\r\n\r\n{power}\r\n\r\n{}\r\n\r\nFix all applies animations, Power saver to Balanced, and the selected fixed pagefile policy when eligible.\r\nPagefile changes need administrator rights and a restart; Undo restores the original configuration.\r\nStorage, startup and updates require your choices in Windows.\r\nNo processes are terminated and no services, security features or pagefiles are disabled.",
+        format!(
+            "{}\n\n{}",
+            ps(script).unwrap_or_else(|e| format!("Checks failed: {e}")),
+            pagefile("Check").unwrap_or_else(|e| format!("Pagefile check failed: {e}"))
+        )
+        .replace('\n', "\r\n")
     )
 }
 pub fn autostart(enable: bool) -> Result<String, String> {
@@ -278,5 +300,13 @@ pub fn install() -> Result<String, String> {
         "& {} -SourceExe {}",
         quote(&script.to_string_lossy()),
         quote(&exe.to_string_lossy())
+    ))
+}
+
+fn pagefile(mode: &str) -> Result<String, String> {
+    ps(&format!(
+        "& {{ {} }} -Mode {}",
+        include_str!("../scripts/Pagefile.ps1"),
+        quote(mode)
     ))
 }

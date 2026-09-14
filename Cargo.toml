@@ -1,6 +1,6 @@
 [package]
 name = "superopti"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "On-demand native Windows performance diagnostics"
 license = "MIT"
@@ -13,7 +13,7 @@ windows = { version = "0.62.2", features = [
  "Win32_System_Performance", "Win32_System_SystemInformation",
  "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell",
  "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_UI_Controls",
- "Win32_System_Power", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_JobObjects"
+ "Win32_System_Power", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_JobObjects", "Win32_UI_Input_KeyboardAndMouse", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"
 ] }
 
 [profile.release]
@@ -21,5 +21,3 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
-
-

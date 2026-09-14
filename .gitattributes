@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.ico -text
+*.png -text
+# Preserve upstream license/schema bytes and whitespace as supplied.
+sbom/licenses/** -text -whitespace
+sbom/rust-toolchain-licenses/** -text -whitespace
+sbom/THIRD_PARTY_NOTICES.md -whitespace
+scripts/schemas/** -text -whitespace
