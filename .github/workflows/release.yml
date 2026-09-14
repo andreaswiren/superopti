@@ -19,8 +19,8 @@ jobs:
       - name: Prepare pinned tools
         run: |
           rustup show
-          cargo install cargo-cyclonedx --version 0.5.9 --locked
-          cargo install cargo-audit --version 0.22.2 --locked
+          cargo install cargo-cyclonedx --version 0.5.9 --locked --debug
+          cargo install cargo-audit --version 0.22.2 --locked --debug
           python -m pip install -r scripts/requirements-sbom.txt
       - name: Check formatting
         run: cargo fmt --all -- --check

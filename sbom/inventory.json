@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-14T19:25:37Z",
+  "generated_at": "2026-09-14T19:32:04Z",
   "application": "superopti",
   "version": "0.2.0",
   "target": "x86_64-pc-windows-msvc",
-  "base_git_commit": "45b42964c0b3e36b0cd26708dbbc573d127382b6",
+  "base_git_commit": "a7e4bfb01ae265ef1b1fe8fe44500911b1725833",
   "tracked_worktree_dirty": true,
-  "source_fingerprint_sha256": "e69f2f99cbaebb959a744598ce0379f2dcc266d0d6c3c8fdcae9ac6f0505874f",
+  "source_fingerprint_sha256": "3195034c13a73ec7e46702eb6d6ce95d38249a4ef4dece8d9895a83ac2f22946",
   "cargo_lock_sha256": "1edcb654aa30366debec546b4334e24536e269928ae57f7e3a5892c3fe7fc8d8",
   "cargo_package_count": 23,
   "coverage": {
@@ -643,8 +643,8 @@
   ],
   "binary": {
     "name": "superopti.exe",
-    "sha256": "f6637f541b5c01681dc89457b2e4d0b5654b00b906e7162ac2ed875c55d93b11",
-    "size_bytes": 767488
+    "sha256": "ab900ceb91a8e4a15449273613147ec7f5702d5be996a4e84e4152b794609b15",
+    "size_bytes": 768000
   },
   "rust_sysroot_rlib_inputs": [
     {

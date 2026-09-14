@@ -14,6 +14,7 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
 - Complete resolved Cargo CycloneDX 1.5 graph, verified archive hashes/license texts, Rust/runtime inventory, schema validation and dependency audit in release packaging.
 
 ### Changed
+- Installer registration reads the embedded product version and uses the absolute system PowerShell path for uninstall.
 - Capture deadline includes helper startup time; Stop terminates all helper threads without blocking on Windows driver I/O cancellation.
 - Table selection tracks process instances across refreshes. Detail requests are serialized and identities checked before inspection.
 - PowerShell launches from the Windows system directory with concurrently drained, bounded captured output.

@@ -1,5 +1,5 @@
 # Software inventory
-Generated 2026-09-14T19:25:37Z. SuperOpti 0.2.0, `x86_64-pc-windows-msvc`.
+Generated 2026-09-14T19:32:04Z. SuperOpti 0.2.0, `x86_64-pc-windows-msvc`.
 All **23 Cargo dependencies** are included and their cached registry archives verified against Cargo.lock. Full license texts: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Machine-readable graph: [superopti.cdx.json](superopti.cdx.json).
 | Package | Version | Direct | Declared SPDX license |
 |---|---|---|---|

@@ -18,7 +18,10 @@ $link.Description = 'On-demand Windows performance diagnostics'
 $link.Save()
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SuperOpti'
 New-Item -Path $key -Force | Out-Null
-$props = @{ DisplayName='SuperOpti'; DisplayVersion='0.1.0'; Publisher='SuperOpti'; InstallLocation=$target; DisplayIcon=$exe; UninstallString="powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$uninstaller`"" }
+$version = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Executable product version is missing or invalid.' }
+$systemPowerShell = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
+$props = @{ DisplayName='SuperOpti'; DisplayVersion=$version; Publisher='SuperOpti'; InstallLocation=$target; DisplayIcon=$exe; UninstallString="`"$systemPowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$uninstaller`"" }
 foreach ($name in $props.Keys) { New-ItemProperty -Path $key -Name $name -Value $props[$name] -PropertyType String -Force | Out-Null }
 $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 if ($AutoStart -or (Get-ItemProperty -Path $run -Name SuperOpti -ErrorAction SilentlyContinue)) {
