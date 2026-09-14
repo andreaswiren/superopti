@@ -569,6 +569,13 @@ fn geometry(width: i32) -> (i32, i32, i32) {
 }
 
 pub unsafe fn layout(app: &App, hwnd: HWND) {
+    // Live samples must not resize or reset an open selection popup.
+    if app.controls.iter().any(|&(h, ..)| {
+        matches!(GetDlgCtrlID(h), 109 | 168 | 169 | 180 | 183)
+            && SendMessageW(h, CB_GETDROPPEDSTATE, None, None).0 != 0
+    }) {
+        return;
+    }
     theme::set_page(app.page);
     let mut r = RECT::default();
     let _ = GetClientRect(hwnd, &mut r);
@@ -649,7 +656,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 199 => (width - 46, 0, 46, 28),
                 181 => (width - 160, 18, 28, 28),
                 182 => (width - 124, 18, 28, 28),
-                183 => (width - 84, 18, 68, 28),
+                183 => (width - 84, 18, 68, 150),
                 101 => (16, 64, 104, 32),
                 194 => (132, 64, 46, 32),
                 195 => (178, 64, 46, 32),
@@ -739,7 +746,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 190 => (x + 536, height - 66, 132, 32),
                 181 => (x + content - 148, 28, 28, 28),
                 182 => (x + content - 112, 28, 28, 28),
-                183 => (x + content - 76, 28, 90, 28),
+                183 => (x + content - 76, 28, 90, 150),
                 174 => (x, height - 52, 140, 32),
                 184 => (x + 338, height - 52, 186, 32),
                 185 => (x + 536, height - 52, 144, 32),
@@ -805,6 +812,15 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
             );
         }
         let scale = |v: i32| (v as f64 * app.scale).round() as i32;
+        if id == 183 {
+            // Combo window height reserves popup space; -1 sizes the closed field.
+            SendMessageW(
+                h,
+                CB_SETITEMHEIGHT,
+                Some(WPARAM(usize::MAX)),
+                Some(LPARAM(scale(22) as isize)),
+            );
+        }
         let _ = MoveWindow(h, scale(a), scale(b), scale(c), scale(d), false);
         if matches!(id, 101 | 108 | 180 | 194..=196) {
             let _ = EnableWindow(h, !app.active);
@@ -856,7 +872,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
             set_text(h, if app.compact { "Full view" } else { "Compact" });
         }
         if id == 183 {
-            let _ = EnableWindow(h, app.pinned && !theme::palette().high_contrast);
+            let _ = EnableWindow(h, !theme::palette().high_contrast);
             SendMessageW(
                 h,
                 CB_SETCURSEL,

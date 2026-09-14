@@ -4,6 +4,8 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
 
 ## [0.3.0] - 2026-09-15
 
+- Repair opacity popup sizing and combo notification handling; choosing transparency enables always-on-top without requiring a separate Pin click.
+
 - Private commit collection and contributor-table column; pressure ranking now
   considers each process's share of the system commit limit.
 - Clickable question-mark help explains the pressure formula, missing evidence,

@@ -338,14 +338,24 @@ unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
             } else if let Some(placement) = app.full_rect.take() {
                 let _ = SetWindowPlacement(hwnd, &placement);
             }
-        } else if app.pinned
-            && let Ok(combo) = GetDlgItem(Some(hwnd), 183)
-        {
+        } else if let Ok(combo) = GetDlgItem(Some(hwnd), 183) {
             let selected = SendMessageW(combo, CB_GETCURSEL, None, None).0;
             app.opacity = [100, 85, 70, 50]
                 .get(selected as usize)
                 .copied()
                 .unwrap_or(100);
+            if app.opacity < 100 && !app.pinned {
+                app.pinned = true;
+                let _ = SetWindowPos(
+                    hwnd,
+                    Some(HWND_TOPMOST),
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                );
+            }
         }
         if theme::palette().high_contrast {
             app.opacity = 100;
@@ -978,6 +988,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_COMMAND => {
+            // Opening, focusing and closing a combo must not relayout it.
+            if matches!(wparam.0 & 0xffff, 109 | 168 | 169 | 180 | 183)
+                && (wparam.0 >> 16) as u32 != CBN_SELCHANGE
+            {
+                return LRESULT(0);
+            }
             command(app, hwnd, wparam.0 & 0xffff);
             LRESULT(0)
         }
