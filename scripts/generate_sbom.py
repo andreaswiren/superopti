@@ -134,6 +134,11 @@ def generate(output: pathlib.Path, binary: pathlib.Path | None) -> None:
         notices.append(f"\n## {p['name']} {p['version']}\n\nDeclared license: `{p.get('license')}`. Source: {p.get('repository') or 'https://crates.io/crates/'+p['name']}.\n")
         for source in sorted(candidates):
             notices.append(f"\n### {source.name}\n\n```text\n{source.read_text(encoding='utf-8',errors='replace').rstrip()}\n```\n")
+    lucide_revision=(ROOT/"assets/lucide/REVISION").read_text(encoding="utf-8-sig").strip()
+    lucide_license=ROOT/"assets/lucide/LICENSE"
+    lucide_folder=licenses_dir/"lucide";lucide_folder.mkdir(exist_ok=True)
+    shutil.copyfile(lucide_license,lucide_folder/"LICENSE")
+    notices.append(f"\n## Lucide native interface icons\n\nRevision: `{lucide_revision}`. ISC license; minimize-2 also includes Feather MIT terms. Adapted for the SuperOpti app/tray brand mark and native interface.\n\n```text\n{lucide_license.read_text(encoding='utf-8')}\n```\n")
     (output/"THIRD_PARTY_NOTICES.md").write_text("".join(notices),encoding="utf-8")
     rust=run("rustc","-Vv"); rustver=re.search(r"^release: (.+)$",rust,re.M)[1]
     target="x86_64-pc-windows-msvc"
@@ -149,6 +154,14 @@ def generate(output: pathlib.Path, binary: pathlib.Path | None) -> None:
     bom["dependencies"].append({"ref":stdref,"dependsOn":[]})
     rootdeps=next(d for d in bom["dependencies"] if d["ref"]==rootref)
     rootdeps["dependsOn"].append(stdref)
+    lucide_ref=f"pkg:github/lucide-icons/lucide@{lucide_revision}#icons/audio-lines.svg"
+    bom["components"].append({"type":"file","bom-ref":lucide_ref,"name":"Lucide audio-lines","version":lucide_revision,"purl":lucide_ref,"licenses":[{"license":{"id":"ISC"}}],"hashes":[{"alg":"SHA-256","content":digest(ROOT/"assets/lucide/audio-lines.svg")}],"properties":[{"name":"superopti:delivery","value":"Adapted icon embedded in executable and shipped as SVG, PNG and ICO"}]})
+    bom["dependencies"].append({"ref":lucide_ref,"dependsOn":[]});rootdeps["dependsOn"].append(lucide_ref)
+    for asset in sorted((ROOT/"assets/lucide").glob("*.svg")):
+        if asset.stem == "audio-lines": continue
+        ref=f"pkg:github/lucide-icons/lucide@{lucide_revision}#icons/{asset.name}"
+        bom["components"].append({"type":"file","bom-ref":ref,"name":f"Lucide {asset.stem}","version":lucide_revision,"purl":ref,"licenses":[{"expression":"ISC AND MIT" if asset.stem == "minimize-2" else "ISC"}],"hashes":[{"alg":"SHA-256","content":digest(asset)}],"properties":[{"name":"superopti:delivery","value":"Adapted native GDI stroke geometry; pinned source SVG included"}]})
+        bom["dependencies"].append({"ref":ref,"dependsOn":[]});rootdeps["dependsOn"].append(ref)
     native_imports=[]
     if binary:
         native_imports=imports(binary)
@@ -157,7 +170,7 @@ def generate(output: pathlib.Path, binary: pathlib.Path | None) -> None:
             bom["components"].append({"type":"library","bom-ref":ref,"name":name,"scope":"required","properties":[{"name":"superopti:delivery","value":"Windows-provided direct PE import; not bundled; version varies with user's OS servicing"}]})
             bom["dependencies"].append({"ref":ref,"dependsOn":[]});rootdeps["dependsOn"].append(ref)
         bom["metadata"]["component"]["hashes"]=[{"alg":"SHA-256","content":digest(binary)}]
-    source_files=sorted([ROOT/"Cargo.toml",ROOT/"Cargo.lock",ROOT/"build.rs",*ROOT.glob("src/*.rs"),*ROOT.glob("assets/*"),*ROOT.glob("resources/*"),ROOT/"scripts/Pagefile.ps1",ROOT/"Install.ps1",ROOT/"Uninstall.ps1",ROOT/"rust-toolchain.toml"])
+    source_files=sorted([ROOT/"Cargo.toml",ROOT/"Cargo.lock",ROOT/"build.rs",*ROOT.glob("src/*.rs"),*(ROOT/"assets").rglob("*"),*ROOT.glob("resources/*"),ROOT/"scripts/Pagefile.ps1",ROOT/"scripts/Checks.ps1",ROOT/"scripts/Discover.ps1",ROOT/"Install.ps1",ROOT/"Uninstall.ps1",ROOT/"rust-toolchain.toml"])
     source_hash=hashlib.sha256()
     for p in source_files:
         if not p.is_file(): continue
@@ -167,8 +180,9 @@ def generate(output: pathlib.Path, binary: pathlib.Path | None) -> None:
     stamp=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z")
     commit=run("git","rev-parse","HEAD")
     dirty=bool(run("git","status","--porcelain","--untracked-files=no"))
-    build={"schema_version":1,"generated_at":stamp,"application":"superopti","version":version,"target":target,"base_git_commit":commit,"tracked_worktree_dirty":dirty,"source_fingerprint_sha256":source_hash.hexdigest(),"cargo_lock_sha256":lock_before,"cargo_package_count":len(inventory),"coverage":{"cargo":"all Cargo.lock registry packages, all targets, including transitive and build/proc-macro dependencies","runtime":"Rust standard library plus direct PE DLL imports; OS servicing versions and transitively loaded OS DLLs are environment-provided and not exhaustively inventoried","limitations":["Source/dependency inventory is not proof that every package function was linked","Windows SDK, compiler/linker and audit/SBOM tools are build tools, not shipped Cargo dependencies","No bundled third-party fonts or UI runtimes; original icon resources are first-party","Vulnerability assessment is recorded separately and is time-bounded"]},"tools":{"rustc":rust,"cargo":run("cargo","--version"),"cargo_cyclonedx":tool,"generator":"scripts/generate_sbom.py v1","jsonschema":"4.26.0"},"components":inventory,"platform_dependencies":[{"name":n,"version":"OS-dependent / not bundled","relationship":"direct PE import"} for n in native_imports],"binary":{"name":binary.name,"sha256":digest(binary),"size_bytes":binary.stat().st_size} if binary else None}
+    build={"schema_version":1,"generated_at":stamp,"application":"superopti","version":version,"target":target,"base_git_commit":commit,"tracked_worktree_dirty":dirty,"source_fingerprint_sha256":source_hash.hexdigest(),"cargo_lock_sha256":lock_before,"cargo_package_count":len(inventory),"coverage":{"cargo":"all Cargo.lock registry packages, all targets, including transitive and build/proc-macro dependencies","runtime":"Rust standard library plus direct PE DLL imports; OS servicing versions and transitively loaded OS DLLs are environment-provided and not exhaustively inventoried","limitations":["Source/dependency inventory is not proof that every package function was linked","Windows SDK, compiler/linker and audit/SBOM tools are build tools, not shipped Cargo dependencies","No bundled third-party fonts or UI runtimes; All ten pinned Lucide icons are inventoried separately as adapted native assets","Vulnerability assessment is recorded separately and is time-bounded"]},"tools":{"rustc":rust,"cargo":run("cargo","--version"),"cargo_cyclonedx":tool,"generator":"scripts/generate_sbom.py v1","jsonschema":"4.26.0"},"components":inventory,"platform_dependencies":[{"name":n,"version":"OS-dependent / not bundled","relationship":"direct PE import"} for n in native_imports],"binary":{"name":binary.name,"sha256":digest(binary),"size_bytes":binary.stat().st_size} if binary else None}
     build["rust_sysroot_rlib_inputs"] = sysroot_files
+    build["bundled_assets"] = [{"name":f"Lucide {asset.stem}","revision":lucide_revision,"license":"ISC AND MIT" if asset.stem == "minimize-2" else "ISC","source_sha256":digest(asset),"license_file":"licenses/lucide/LICENSE"} for asset in sorted((ROOT/"assets/lucide").glob("*.svg"))]
     build["rust_license_evidence"] = "rust-toolchain-licenses/COPYRIGHT-library.html and bundled license texts; sysroot libraries are compiler inputs, not all necessarily linked"
     sdk=pathlib.Path(os.environ.get("ProgramFiles(x86)",r"C:\Program Files (x86)"))/"Windows Kits/10/bin"
     versions=sorted(p.parent.parent.name for p in sdk.glob("*/x64/rc.exe"))
@@ -182,6 +196,7 @@ def generate(output: pathlib.Path, binary: pathlib.Path | None) -> None:
     save(output/"superopti.cdx.json",bom);save(output/"inventory.json",build)
     lines=["# Software inventory\n",f"Generated {stamp}. SuperOpti {version}, `{target}`.\n",f"All **{len(inventory)} Cargo dependencies** are included and their cached registry archives verified against Cargo.lock. Full license texts: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Machine-readable graph: [superopti.cdx.json](superopti.cdx.json).\n","| Package | Version | Direct | Declared SPDX license |\n|---|---|---|---|\n"]
     lines += [f"| {p['name']} | {p['version']} | {'Yes' if p['direct'] else 'No'} | {p['declared_license']} |\n" for p in inventory]
+    lines += [f"\nBundled visual assets: ten Lucide icons including `audio-lines`, revision `{lucide_revision}`, ISC licenses, with the retained Feather MIT notice for `minimize-2`. Adapted native drawings and SVG/PNG/ICO resources are embedded and shipped; upstream source hash and license are included in CycloneDX and inventory.json.\n"]
     lines += ["\nThe overall CycloneDX composition is intentionally marked incomplete because Windows-internal runtime dependencies vary by installed OS. This does not omit Cargo packages: the complete Cargo.lock set is cross-checked, including both syn versions and proc-macro/build dependencies.\n",f"\nRust standard library: {rustver}. Windows SDK resource compiler: {build['tools']['windows_sdk_resource_compiler']}.\n","\nDirect Windows PE imports (platform-provided, not bundled): "+", ".join(f"`{n}`" for n in native_imports)+".\n","\nBuild source fingerprint, executable hash, dependency archive hashes and toolchain metadata: [inventory.json](inventory.json). The checked-in snapshot may describe an uncommitted working tree; each release regenerates evidence against its exact checked-out revision and built binary.\n"]
     (output/"INVENTORY.md").write_text("".join(lines),encoding="utf-8")
     print(f"Validated CycloneDX 1.5: {len(inventory)} Cargo components, {len(native_imports)} direct PE imports; archive checksums and dependency references verified.")

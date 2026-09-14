@@ -150,6 +150,10 @@ impl Drop for Query {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Process {
     #[serde(default)]
+    pub parent_pid: u32,
+    #[serde(default)]
+    pub commit_mb: Option<f64>,
+    #[serde(default)]
     pub created_ticks: Option<u64>,
     pub pid: u32,
     pub name: String,
@@ -164,6 +168,10 @@ pub struct Process {
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Sample {
+    #[serde(default)]
+    pub commit_limit_mb: Option<f64>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub cores: HashMap<String, f64>,
     pub unix_seconds: u64,
     pub elapsed: f64,
     pub cpu: Option<f64>,
@@ -209,10 +217,12 @@ impl Monitor {
             ("switch", r"\System\Context Switches/sec"),
             ("net", r"\Network Interface(*)\Bytes Total/sec"),
             ("gpu", r"\GPU Engine(*)\Utilization Percentage"),
+            ("cores", r"\Processor Information(*)\% Processor Time"),
         ] {
             let category = match key {
                 "disk_idle" | "disk_mb" | "latency" | "disk_queue" => "disk",
                 "gpu" => "gpu",
+                "cores" => "cores",
                 "net" => "network",
                 _ => "extra",
             };
@@ -269,6 +279,12 @@ impl Monitor {
             ..Default::default()
         };
         s.gpu_processes = gpu_by_pid;
+        s.cores = q
+            .array("cores")
+            .into_iter()
+            .filter(|(name, _)| !name.contains("_Total"))
+            .map(|(name, v)| (name, v.clamp(0., 100.)))
+            .collect();
         s.collection_ms = started.elapsed().as_secs_f64() * 1000.0;
         Ok(s)
     }
@@ -284,7 +300,22 @@ pub fn rank(p: &mut Process, s: &Sample) {
     } else {
         0.0
     };
+    let commit_share = p
+        .commit_mb
+        .zip(s.commit_limit_mb)
+        .filter(|(_, limit)| *limit > 0.)
+        .map_or(0., |(used, limit)| 100. * used / limit);
     let candidates = [
+        (
+            (commit_share
+                * if s.commit.unwrap_or(0.) >= 85. {
+                    1.
+                } else {
+                    0.2
+                })
+            .min(100.),
+            "Commit footprint",
+        ),
         (p.cpu.unwrap_or(0.0), "CPU"),
         (
             memory_share
@@ -350,6 +381,28 @@ mod tests {
         s.ram = Some(90.0);
         rank(&mut p, &s);
         assert_eq!(p.reason, "RAM footprint");
+    }
+    #[test]
+    fn commit_pressure_changes_ranking_without_calling_it_swap() {
+        let mut p = Process {
+            commit_mb: Some(8000.),
+            cpu: Some(20.),
+            ..Default::default()
+        };
+        let mut system = Sample {
+            commit_limit_mb: Some(16000.),
+            commit: Some(60.),
+            ..Default::default()
+        };
+        rank(&mut p, &system);
+        assert_eq!(p.reason, "CPU");
+        system.commit = Some(90.);
+        rank(&mut p, &system);
+        assert_eq!(p.reason, "Commit footprint");
+        assert_eq!(p.score, 50.);
+        system.commit_limit_mb = None;
+        rank(&mut p, &system);
+        assert_eq!(p.reason, "CPU");
     }
     #[test]
     fn missing_counters_are_not_claimed_as_zero() {

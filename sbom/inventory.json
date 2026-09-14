@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-14T19:32:04Z",
+  "generated_at": "2026-09-14T22:46:59Z",
   "application": "superopti",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "target": "x86_64-pc-windows-msvc",
-  "base_git_commit": "a7e4bfb01ae265ef1b1fe8fe44500911b1725833",
+  "base_git_commit": "380dd4944c3d5faa9f118aa7eb064d01232d6284",
   "tracked_worktree_dirty": true,
-  "source_fingerprint_sha256": "3195034c13a73ec7e46702eb6d6ce95d38249a4ef4dece8d9895a83ac2f22946",
-  "cargo_lock_sha256": "1edcb654aa30366debec546b4334e24536e269928ae57f7e3a5892c3fe7fc8d8",
+  "source_fingerprint_sha256": "6067d47a490e52cb86e2bfe6a73ba3e4bb989f738cd48670a03eed292bd1f65b",
+  "cargo_lock_sha256": "6d32cd0ded8f4e826cbaa2a5e94b63803bacea0594cd18fafe0dc2eb816e66fa",
   "cargo_package_count": 23,
   "coverage": {
     "cargo": "all Cargo.lock registry packages, all targets, including transitive and build/proc-macro dependencies",
@@ -15,7 +15,7 @@
     "limitations": [
       "Source/dependency inventory is not proof that every package function was linked",
       "Windows SDK, compiler/linker and audit/SBOM tools are build tools, not shipped Cargo dependencies",
-      "No bundled third-party fonts or UI runtimes; original icon resources are first-party",
+      "No bundled third-party fonts or UI runtimes; All ten pinned Lucide icons are inventoried separately as adapted native assets",
       "Vulnerability assessment is recorded separately and is time-bounded"
     ]
   },
@@ -541,6 +541,11 @@
   ],
   "platform_dependencies": [
     {
+      "name": "advapi32.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
       "name": "api-ms-win-core-synch-l1-2-0.dll",
       "version": "OS-dependent / not bundled",
       "relationship": "direct PE import"
@@ -581,12 +586,27 @@
       "relationship": "direct PE import"
     },
     {
+      "name": "combase.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
       "name": "comctl32.dll",
       "version": "OS-dependent / not bundled",
       "relationship": "direct PE import"
     },
     {
+      "name": "dwmapi.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
       "name": "gdi32.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
+      "name": "gdiplus.dll",
       "version": "OS-dependent / not bundled",
       "relationship": "direct PE import"
     },
@@ -602,6 +622,11 @@
     },
     {
       "name": "ntdll.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
+      "name": "ole32.dll",
       "version": "OS-dependent / not bundled",
       "relationship": "direct PE import"
     },
@@ -636,15 +661,30 @@
       "relationship": "direct PE import"
     },
     {
+      "name": "uxtheme.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
       "name": "vcruntime140.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
+      "name": "version.dll",
+      "version": "OS-dependent / not bundled",
+      "relationship": "direct PE import"
+    },
+    {
+      "name": "ws2_32.dll",
       "version": "OS-dependent / not bundled",
       "relationship": "direct PE import"
     }
   ],
   "binary": {
     "name": "superopti.exe",
-    "sha256": "ab900ceb91a8e4a15449273613147ec7f5702d5be996a4e84e4152b794609b15",
-    "size_bytes": 768000
+    "sha256": "ce6b450bca1943e293ab402af6549eb37ecd3eee58ee38c0a9b6f8b85cb2eb39",
+    "size_bytes": 1435648
   },
   "rust_sysroot_rlib_inputs": [
     {
@@ -730,6 +770,78 @@
     {
       "name": "libwindows_link-e554f8198c348704.rlib",
       "sha256": "bd6807f902778d399ece87c54b78d5af50ed40bb53fd3c2fc501c0bc5dc99ac2"
+    }
+  ],
+  "bundled_assets": [
+    {
+      "name": "Lucide arrow-left-right",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "2d64da427cbb3f14e522658459903829575b09ec15162c1a69ea6ad341a4359a",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide audio-lines",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "3942b8a5d6bccc927a55f857f0d44b90e2663470cd2d569000c9b60c37578dfa",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide chart-no-axes-column",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "5dfd8fc5b5417dad858991de4969c3fe1c4a466104d0880a15b691ff7c5b1f12",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide cpu",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "ec83bb69ec029d367d749afc445b39c8e95891ebf99b0400652677c2b149b99c",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide layout-dashboard",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide minimize-2",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC AND MIT",
+      "source_sha256": "1150437d5a870321c59b7ebca2e1bc3f6227f0fa03dd10484ab384dfe5110739",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide network",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "626be730feea1e5ea7539fbf78b4a3fcb927ce5d7dc43364f2216908672ac792",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide pin",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "55e8e5e04bcb671179fc1dd589abf09cf6a1e71301ff14eb739419cfab6011e7",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide settings-2",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "06d06c191bd7eb28afaf9d40acb5c49ef69448fdeda91801d9823d7c440a4e10",
+      "license_file": "licenses/lucide/LICENSE"
+    },
+    {
+      "name": "Lucide shield-check",
+      "revision": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "license": "ISC",
+      "source_sha256": "8d4fcdbde5bba4abb1a2f6fe53e37ceb6343a1d5449a9d88f6f97c1971d26c4e",
+      "license_file": "licenses/lucide/LICENSE"
     }
   ],
   "rust_license_evidence": "rust-toolchain-licenses/COPYRIGHT-library.html and bundled license texts; sysroot libraries are compiler inputs, not all necessarily linked"

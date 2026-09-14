@@ -15,8 +15,13 @@ try {
  $auditResult = Get-Content -Raw dist/sbom/cargo-audit.json | ConvertFrom-Json
  if ($auditResult.vulnerabilities.count -ne 0) { throw 'Dependency vulnerabilities detected' }
  & ./scripts/Test-Pagefile.ps1
+ & ./scripts/Test-Checks.ps1
  $smoke = Start-Process ./dist/superopti.exe -ArgumentList '--smoke-test','work/smoke-result.json' -WindowStyle Hidden -Wait -PassThru
  if ($smoke.ExitCode -ne 0) { throw 'Native smoke test failed; see work/smoke-result.json' }
+ if ($env:GITHUB_ACTIONS -eq 'true') {
+  $network = Start-Process ./dist/superopti.exe -ArgumentList '--network-smoke-test','work/network-smoke.json' -WindowStyle Hidden -Wait -PassThru
+  if ($network.ExitCode -ne 0) { Get-Content work/network-smoke.json; throw 'Privileged TCP/UDP accounting smoke test failed' }
+ }
  $files = @('dist/superopti.exe','Install.ps1','Uninstall.ps1','README.md','LICENSE','CHANGELOG.md','SECURITY.md','VALIDATION.md','docs','assets','dist/sbom')
  Compress-Archive -Path $files -DestinationPath dist/SuperOpti-windows-x64.zip -Force
  Compress-Archive -Path dist/sbom -DestinationPath dist/SuperOpti-SBOM.zip -Force

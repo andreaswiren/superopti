@@ -1,6 +1,6 @@
 # Cyber Resilience Act documentation
 
-Assessment: 2026-09-14, SuperOpti 0.2.0 Windows x64 preview. Declared model: individual, non-commercial MIT open source.
+Technical evidence updated: 2026-09-15, SuperOpti 0.3.0 Windows x64 preview. Scope assessment dated 2026-09-14. Declared model: individual, non-commercial MIT open source.
 
 The assessment is **outside the CRA commercial FOSS scope on the stated facts**, with voluntary engineering evidence and explicit gaps. This is not an EU declaration of conformity, CE marking justification or guarantee if the facts change.
 

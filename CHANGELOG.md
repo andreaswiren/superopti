@@ -2,6 +2,38 @@
 
 Application versions follow Semantic Versioning; preview tags append CI run/attempt. Dates use YYYY-MM-DD.
 
+## [0.3.0] - 2026-09-15
+
+- Private commit collection and contributor-table column; pressure ranking now
+  considers each process's share of the system commit limit.
+- Clickable question-mark help explains the pressure formula, missing evidence,
+  and the difference between resident RAM, private commit and actual swap.
+- On-demand system checks report CPU firmware-limiting Event 37 history over the
+  last 24 hours, with explicit unavailable/no-report states rather than claiming
+  that throttling is absent.
+- Signal native dashboard with compact Segoe UI typography, system themes,
+  antialiased measured-data curves, smooth controls and structured tables.
+- Padded Workspace header, horizontal SuperOpti rail branding, colored capture
+  status, pin/compact icon controls and native minimize/maximize/close controls.
+- Capture outcome distinguishes automatic completion, manual stop and failure.
+- System health separates deviations, blocked actions, unavailable evidence and
+  optional preferences, and sorts actionable findings first. Disk-space warning
+  boundaries are tested without changing system settings.
+- Signal waveform app/tray/README icons, with pinned Lucide source and license
+  included in the dependency inventory.
+- On-demand executable metadata tooltips (manufacturer, version, file size and
+  location), with bounded helper execution and cached process icons.
+- Live TCP/UDP history rows refresh every two seconds during recording; the
+  visible latest 500 flow buckets do not limit the full local archive. Browsing
+  history pauses visual follow, with an explicit Follow live action to resume.
+- Native pinned compact view, opacity controls and process/file folder actions
+  are implemented in the candidate. Throttle graph overlays and supported GPU
+  throttle telemetry remain outstanding.
+
+Validation scope and unfinished diagnostics are documented in VALIDATION.md.
+This release is a preview; scoped visual passes do not constitute full
+accessibility or hardware-matrix validation.
+
 ## [0.2.0] - 2026-09-14
 
 ### Added

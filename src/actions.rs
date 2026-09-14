@@ -228,51 +228,128 @@ pub fn undo() -> Result<String, String> {
     }
     Ok(results.join("\r\n"))
 }
-pub fn checks() -> String {
-    let anim = match animation() {
-        Ok(true) => {
-            "REVIEW: Client-area animations enabled. Optional fix reduces motion; benefit may be small."
+pub fn check_report() -> crate::model::Report {
+    let mut r = crate::model::Report::new(
+        "System checks",
+        &["Status", "Check", "Current", "Target / context", "Action"],
+    );
+    match animation() {
+        Ok(enabled) => r.row(&[
+            if enabled { "Optional" } else { "OK" },
+            "Client animations",
+            if enabled { "Enabled" } else { "Disabled" },
+            "Optional reduced motion",
+            "Reduce animations",
+        ]),
+        Err(_) => r.row(&[
+            "Unknown",
+            "Client animations",
+            "N/A",
+            "Access unavailable",
+            "",
+        ]),
+    }
+    match active_power() {
+        Ok(g) if g == SAVER => r.row(&[
+            "Review",
+            "Power plan",
+            "Power saver",
+            "Balanced",
+            "Use Balanced power",
+        ]),
+        Ok(g) if g == BALANCED => r.row(&["OK", "Power plan", "Balanced", "Balanced", ""]),
+        Ok(_) => r.row(&[
+            "Review",
+            "Power plan",
+            "Custom / other",
+            "Preserved",
+            "Power settings",
+        ]),
+        Err(_) => r.row(&["Unknown", "Power plan", "N/A", "Access unavailable", ""]),
+    }
+    let rows = ps(include_str!("../scripts/Checks.ps1"))
+        .and_then(|s| serde_json::from_str::<Vec<Vec<String>>>(&s).map_err(|e| e.to_string()));
+    match rows {
+        Ok(rows) => r.rows.extend(rows),
+        Err(e) => r.row(&["Unknown", "Windows checks", "Unavailable", &e, "Retry"]),
+    }
+    match pagefile("Inspect")
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).map_err(|e| e.to_string()))
+    {
+        Ok(p) => {
+            let target = p["targetMiB"].as_f64().unwrap_or(0.0) / 1024.0;
+            let actual = p["allocatedMiB"].as_f64().unwrap_or(0.0) / 1024.0;
+            r.row(&[
+                if p["matched"] == true {
+                    "OK"
+                } else {
+                    "Warning"
+                },
+                "Fixed pagefile",
+                &format!("{actual:.1} GiB allocated"),
+                &format!("{target:.1} GiB initial = maximum"),
+                "Set fixed pagefile",
+            ]);
+            r.row(&[
+                if p["spaceOK"] == true {
+                    "OK"
+                } else {
+                    "Blocked"
+                },
+                "Pagefile disk space",
+                if p["spaceOK"] == true {
+                    "Sufficient"
+                } else {
+                    "Insufficient"
+                },
+                &format!(
+                    "Growth {:.1} + reserve {:.1} GiB",
+                    p["growthGiB"].as_f64().unwrap_or(0.0),
+                    p["reserveGiB"].as_f64().unwrap_or(0.0)
+                ),
+                "Storage",
+            ]);
+            if p["supported"] != true {
+                r.row(&[
+                    "Blocked",
+                    "Pagefile layout",
+                    "Multiple / custom",
+                    "Preserved",
+                    "Virtual memory",
+                ]);
+            }
         }
-        Ok(false) => "OK: Client-area animations disabled.",
-        Err(_) => "UNKNOWN: Animation setting unavailable.",
-    };
-    let power = match active_power() {
-        Ok(g) if g == SAVER => {
-            "REVIEW: Power saver is active. Balanced can improve responsiveness at a battery cost."
-                .into()
-        }
-        Ok(g) => format!(
-            "OK/REVIEW: Power plan {g:?}. Custom plans and power-mode overlays need manual review."
-        ),
-        Err(e) => format!("UNKNOWN: Power plan: {e}"),
-    };
-    let script = r#"
-$ErrorActionPreference='Stop'
-try {
- Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -OperationTimeoutSec 5 | ForEach-Object {
- if ($_.Size -gt 0) { $p=[math]::Round(100*$_.FreeSpace/$_.Size,1); $state=if($p -lt 15){'REVIEW'}else{'OK'}; "$state`: Drive $($_.DeviceID) has $p% free ($([math]::Round($_.FreeSpace/1GB,1)) GiB). Review storage if low." }
- }
-} catch { 'UNKNOWN: Free disk space could not be queried.' }
-try {
- $s=@(Get-CimInstance Win32_StartupCommand -OperationTimeoutSec 5)
- "REVIEW: $($s.Count) startup entries found (includes entries that may be disabled). Use Startup apps to choose what is needed."
-} catch { 'UNKNOWN: Startup entries unavailable.' }
-$r=(Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
-if($r){'REVIEW: Windows servicing indicates a pending restart. Save work and review Windows Update.'}else{'OK: No servicing/update restart flag found; this does not prove all updates are installed.'}
-try {
- $os=Get-CimInstance Win32_OperatingSystem -OperationTimeoutSec 5
- "INFO: Uptime $([math]::Round(((Get-Date)-$os.LastBootUpTime).TotalDays,1)) days. Long uptime alone is not a fault."
-} catch { 'UNKNOWN: Uptime unavailable.' }
-"#;
-    format!(
-        "SYSTEM CHECKS / on demand\r\n\r\n{anim}\r\n\r\n{power}\r\n\r\n{}\r\n\r\nFix all applies animations, Power saver to Balanced, and the selected fixed pagefile policy when eligible.\r\nPagefile changes need administrator rights and a restart; Undo restores the original configuration.\r\nStorage, startup and updates require your choices in Windows.\r\nNo processes are terminated and no services, security features or pagefiles are disabled.",
-        format!(
-            "{}\n\n{}",
-            ps(script).unwrap_or_else(|e| format!("Checks failed: {e}")),
-            pagefile("Check").unwrap_or_else(|e| format!("Pagefile check failed: {e}"))
-        )
-        .replace('\n', "\r\n")
-    )
+        Err(e) => r.row(&["Unknown", "Pagefile", "Unavailable", &e, "Retry"]),
+    }
+    // Put actionable deviations first; optional appearance preferences do not
+    // outrank low disk space or a blocked pagefile change.
+    r.rows
+        .sort_by_key(|row| match row.first().map(String::as_str) {
+            Some("Critical") => 0,
+            Some("Blocked") => 1,
+            Some("Warning") => 2,
+            Some("Review") => 3,
+            Some("Unknown") | None => 4,
+            Some("Optional") => 5,
+            Some("OK") => 6,
+            _ => 7,
+        });
+    for (label, statuses) in [
+        ("Checks OK", &["OK"][..]),
+        ("Deviations", &["Warning", "Critical"][..]),
+        ("Blocked", &["Blocked"][..]),
+        ("Unavailable", &["Unknown"][..]),
+        ("Optional / review", &["Optional", "Review"][..]),
+    ] {
+        r.metric(
+            label,
+            r.rows
+                .iter()
+                .filter(|row| row.first().is_some_and(|v| statuses.contains(&v.as_str())))
+                .count(),
+        );
+    }
+    r
 }
 pub fn autostart(enable: bool) -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;

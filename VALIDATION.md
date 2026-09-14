@@ -1,5 +1,18 @@
 # Validation evidence
 
+## 0.3.0 candidate — 2026-09-15
+
+- Formatting and clippy all targets with warnings denied pass; 18 Rust tests pass. Added checks cover shape-preserving graph interpolation, executable metadata, native Segoe UI selection, bounded live history, IPv6 filters and commit-aware ranking.
+- Seven pagefile sizing/unknown-memory cases pass without changing system settings.
+- Final optimized capture smoke: automatic stop 10,003 ms, immediate manual stop 0 ms at millisecond resolution, and no sample events after stopping. CycloneDX schema, dependency graph and archive hashes validate for 23 Cargo packages, ten Lucide assets and 28 direct Windows PE imports; cargo-audit reports zero known vulnerabilities.
+- Full traffic UI interaction was interrupted by concurrent input during desktop validation. Opacity has a correctly annotated parent name, but its native child accessibility text was observed as stale Duration. These remain explicit UI validation limitations.
+- Two independent UX reviewers inspected actual native windows. Dark overview graphs, typography and small process icons passed scoped review. Light overview and 480 × 508 compact/full switching passed scoped review. The revised padded Workspace header, horizontal SuperOpti branding, icon controls, colored state and antialiased surfaces passed dark Signal 8 and light/compact Signal 9 scoped reviews.
+- Custom maximize and restore were exercised on a 5120 × 2112 display and restored the original 1380 × 980 window. Mixed-DPI, high-contrast, keyboard/Snap and complete accessibility matrices remain unverified.
+- Live history unit checks preserve all archived bytes while limiting visible rows to 500. Privileged controlled TCP/UDP accounting is a release CI gate; full IPv6 scope/connection-instance validation remains open.
+- Per-process observed-core attribution, thread-to-file activity, live throttle overlays and supported GPU throttle telemetry remain unavailable. Administrator pagefile/reboot/rollback, install/uninstall and sign-in autostart are not locally exercised.
+
+## Historical 0.2.0 evidence
+
 SuperOpti 0.2.0 preview, Windows 11 x64, 2026-09-14. These observations apply to the local validation build; release CI independently repeats automated gates against the published commit.
 
 ## Passed

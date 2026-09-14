@@ -131,10 +131,52 @@ pub fn worker(
     let action_events = events.clone();
     let action_handle = std::thread::spawn(move || {
         while let Ok(command) = action_rx.recv() {
+            let page = if matches!(&command, Command::Devices(_) | Command::DeviceChanges) {
+                4
+            } else if matches!(&command, Command::TrafficHistory(..)) {
+                5
+            } else if matches!(&command, Command::Auto(_) | Command::Install) {
+                2
+            } else {
+                1
+            };
             let report = match command {
-                Command::Checks => actions::checks(),
-                Command::Fix(n) => actions::fix(n).unwrap_or_else(|e| e),
-                Command::Undo => actions::undo().unwrap_or_else(|e| e),
+                Command::Metadata(pid, created) => {
+                    let metadata =
+                        probe_data("--metadata-probe", pid, created).unwrap_or_else(|e| {
+                            crate::inspect::ProcessMetadata {
+                                error: Some(e),
+                                ..Default::default()
+                            }
+                        });
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::Metadata(pid, created, metadata),
+                    );
+                    continue;
+                }
+                Command::Checks => actions::check_report(),
+                Command::Devices(active) => {
+                    crate::devices::scan(active).unwrap_or_else(crate::model::Report::error)
+                }
+                Command::DeviceChanges => {
+                    crate::devices::changes().unwrap_or_else(crate::model::Report::error)
+                }
+                Command::TrafficHistory(request, filter) => {
+                    let report = crate::traffic::history(&filter)
+                        .unwrap_or_else(crate::model::Report::error);
+                    emit(hwnd, &action_events, Event::TrafficHistory(request, report));
+                    continue;
+                }
+                Command::Fix(n) => crate::model::Report::outcome(
+                    "Apply fixes",
+                    actions::fix(n).unwrap_or_else(|e| format!("Failed: {e}")),
+                ),
+                Command::Undo => crate::model::Report::outcome(
+                    "Undo fixes",
+                    actions::undo().unwrap_or_else(|e| format!("Failed: {e}")),
+                ),
                 Command::Threads(pid, created) => {
                     emit(
                         hwnd,
@@ -149,9 +191,68 @@ pub fn worker(
                         &action_events,
                         Event::ProcessReport(
                             pid,
-                            crate::native::process_report(pid, created).unwrap_or_else(|e| e),
+                            crate::native::process_report(pid, created)
+                                .unwrap_or_else(crate::model::Report::error),
                         ),
                     );
+                    continue;
+                }
+                Command::Files(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(
+                            pid,
+                            bounded_probe("--open-files-probe", pid, created),
+                        ),
+                    );
+                    continue;
+                }
+                Command::Children(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(
+                            pid,
+                            crate::inspect::children(pid, created)
+                                .unwrap_or_else(crate::model::Report::error),
+                        ),
+                    );
+                    continue;
+                }
+                Command::Services(pid, created) => {
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ProcessReport(
+                            pid,
+                            crate::inspect::services(pid, created)
+                                .unwrap_or_else(crate::model::Report::error),
+                        ),
+                    );
+                    continue;
+                }
+                Command::Reveal(pid, created, path) => {
+                    let result =
+                        crate::native::ProcessIdentity::open(pid, created).and_then(|identity| {
+                            let path = path.map(Ok).unwrap_or_else(|| identity.image_path())?;
+                            crate::inspect::open_folder(&path)
+                        });
+                    emit(
+                        hwnd,
+                        &action_events,
+                        Event::ActionStatus(match result {
+                            Ok(()) => "Opened · selected item in File Explorer".into(),
+                            Err(e) => format!("Unavailable · {e}"),
+                        }),
+                    );
+                    continue;
+                }
+                Command::Connections(pid, created) => {
+                    let report = crate::native::ProcessIdentity::open(pid, created)
+                        .map(|_identity| crate::network::snapshot(pid))
+                        .unwrap_or_else(crate::model::Report::error);
+                    emit(hwnd, &action_events, Event::ProcessReport(pid, report));
                     continue;
                 }
                 Command::Network(pid, created) => {
@@ -160,24 +261,55 @@ pub fn worker(
                         &action_events,
                         Event::ProcessReport(
                             pid,
-                            crate::network::measure(pid, created).unwrap_or_else(|e| e),
+                            crate::network::measure(pid, created)
+                                .unwrap_or_else(crate::model::Report::error),
                         ),
                     );
                     continue;
                 }
-                Command::Auto(b) => actions::autostart(b).unwrap_or_else(|e| e),
-                Command::Install => actions::install().unwrap_or_else(|e| e),
+                Command::Auto(b) => crate::model::Report::outcome(
+                    "Autostart",
+                    actions::autostart(b).unwrap_or_else(|e| format!("Failed: {e}")),
+                ),
+                Command::Install => crate::model::Report::outcome(
+                    "Installation",
+                    actions::install().unwrap_or_else(|e| format!("Failed: {e}")),
+                ),
                 Command::Quit => break,
                 _ => continue,
             };
-            emit(hwnd, &action_events, Event::Report(report));
+            emit(hwnd, &action_events, Event::Structured(page, report));
         }
     });
     let mut generation = 0u64;
     let mut capture: Option<Capture> = None;
+    let mut traffic: Option<crate::traffic::Recorder> = None;
     while let Ok(command) = rx.recv() {
         match command {
             Command::Quit => break,
+            Command::TrafficStart | Command::Network(_, _) => {
+                drop(traffic.take());
+                let events_clone = events.clone();
+                match crate::traffic::start(120, move |active, report| {
+                    emit(hwnd, &events_clone, Event::TrafficState(active));
+                    emit(hwnd, &events_clone, Event::TrafficUpdate(report));
+                }) {
+                    Ok(recording) => {
+                        traffic = Some(recording);
+                    }
+                    Err(e) => {
+                        emit(hwnd, &events, Event::TrafficState(false));
+                        emit(
+                            hwnd,
+                            &events,
+                            Event::Structured(5, crate::model::Report::error(e)),
+                        );
+                    }
+                }
+            }
+            Command::TrafficStop => {
+                drop(traffic.take());
+            }
             Command::Start(seconds, step) => {
                 capture = None;
                 generation += 1;
@@ -193,7 +325,7 @@ pub fn worker(
                         _job: job,
                     };
                     metrics::trace("Capture launch begin");
-                    for group in ["core", "extra", "disk", "gpu", "network"] {
+                    for group in ["core", "extra", "disk", "gpu", "network", "cores"] {
                         c.children.push(launch(
                             group,
                             seconds,
@@ -229,17 +361,22 @@ pub fn worker(
                     Err(e) => emit(
                         hwnd,
                         &events,
-                        Event::Stopped(format!("Capture could not start: {e}")),
+                        Event::Stopped(
+                            crate::CaptureEnd::Failed,
+                            format!("Capture could not start: {e}"),
+                        ),
                     ),
                 }
             }
             Command::Stop => {
+                drop(traffic.take());
                 capture = None;
                 generation += 1;
                 emit(
                     hwnd,
                     &events,
                     Event::Stopped(
+                        crate::CaptureEnd::Stopped,
                         "IDLE  /  Sampling stopped; Windows may finish pending I/O cleanup.".into(),
                     ),
                 );
@@ -252,6 +389,7 @@ pub fn worker(
                     hwnd,
                     &events,
                     Event::Stopped(
+                        crate::CaptureEnd::Completed,
                         "IDLE  /  Capture completed automatically. No background sampling.".into(),
                     ),
                 );
@@ -282,6 +420,15 @@ pub fn worker(
                                         }
                                     }
                                     "network" => s.network_mb = extra.network_mb,
+                                    "cores" => {
+                                        s.cores = extra.cores.clone();
+                                        if !s.cores.is_empty() {
+                                            s.cpu = Some(
+                                                s.cores.values().sum::<f64>()
+                                                    / s.cores.len() as f64,
+                                            );
+                                        }
+                                    }
                                     "extra" => {
                                         s.swap = extra.swap;
                                         s.page_reads = extra.page_reads;
@@ -335,6 +482,7 @@ pub fn worker(
         }
     }
     drop(capture);
+    drop(traffic);
     let _ = action_tx.send(Command::Quit);
     let _ = action_handle.join();
 }
@@ -377,12 +525,26 @@ pub fn collector(group: &str, seconds: u64, step: u64) {
         let _ = send(Event::Report(e));
     }
 }
-fn thread_probe(pid: u32, expected: Option<u64>) -> String {
+fn thread_probe(pid: u32, expected: Option<u64>) -> crate::model::Report {
+    bounded_probe("--thread-probe", pid, expected)
+}
+fn bounded_probe(kind: &str, pid: u32, expected: Option<u64>) -> crate::model::Report {
+    probe_data(kind, pid, expected).unwrap_or_else(crate::model::Report::error)
+}
+fn probe_data<T: serde::de::DeserializeOwned>(
+    kind: &str,
+    pid: u32,
+    expected: Option<u64>,
+) -> Result<T, String> {
     let result = (|| -> Result<String, String> {
         let _identity = crate::native::ProcessIdentity::open(pid, expected)?;
         let job = Job::new()?;
         let mut child = ProcessCommand::new(std::env::current_exe().map_err(|e| e.to_string())?)
-            .args(["--thread-probe", &pid.to_string()])
+            .args([
+                kind,
+                &pid.to_string(),
+                &expected.map(|v| v.to_string()).unwrap_or_default(),
+            ])
             .creation_flags(0x08000000)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -393,7 +555,9 @@ fn thread_probe(pid: u32, expected: Option<u64>) -> String {
         let reader = std::thread::spawn(move || {
             use std::io::Read;
             let mut text = String::new();
-            let _ = BufReader::new(pipe).read_to_string(&mut text);
+            let _ = BufReader::new(pipe)
+                .take(16 * 1024 * 1024)
+                .read_to_string(&mut text);
             text
         });
         let start = Instant::now();
@@ -410,7 +574,8 @@ fn thread_probe(pid: u32, expected: Option<u64>) -> String {
         }
         reader.join().map_err(|_| "Thread reader failed".into())
     })();
-    result.unwrap_or_else(|e| e)
+    result
+        .and_then(|s| serde_json::from_str(&s).map_err(|e| format!("Invalid inspection data: {e}")))
 }
 
 // Exercises real helper startup, automatic deadline, cancellation and idle behavior.
@@ -429,7 +594,7 @@ pub fn smoke_test() -> Result<serde_json::Value, String> {
                 .map_err(|e| e.to_string())?
             {
                 Event::Sample(s) => samples.push(*s),
-                Event::Stopped(_) => break,
+                Event::Stopped(..) => break,
                 _ => {}
             }
             if start.elapsed() > Duration::from_secs(15) {
@@ -456,7 +621,7 @@ pub fn smoke_test() -> Result<serde_json::Value, String> {
             received
                 .recv_timeout(Duration::from_secs(3))
                 .map_err(|e| e.to_string())?,
-            Event::Stopped(_)
+            Event::Stopped(..)
         ) {}
         let stop_ms = start.elapsed().as_millis();
         if stop_ms > 2000 {

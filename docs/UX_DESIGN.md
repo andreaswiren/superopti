@@ -1,52 +1,52 @@
 # SuperOpti desktop experience
 
-## Design intent
+## Selected direction: Signal
 
-SuperOpti should be calm while the computer is healthy and immediately useful during slowness. The primary action is a short, bounded capture. A completed capture remains readable; hiding the window never implies that recording has stopped. The header and tray tooltip always distinguish idle, capturing and completed states.
+The user selected Signal after review by a lead designer and two independent UX critics. The native implementation follows its table-first composition: a 140 logical-pixel labeled rail, compact resource cards, an enclosed contributor table, a substantial resource-history graph and a separate resource-peak insight panel. No illustrative telemetry is present in the native application.
 
-The visual system uses a pale slate workspace, white trend cards, dark navy typography and a restrained teal identity. Segoe UI and Windows common controls retain familiar keyboard behavior without a browser, web renderer, chart package or animation runtime. Secondary metrics use distinct colors and explicit names; color is never the only identifier.
+The custom caption occupies the top 28 logical pixels. The padded content header shows Workspace, a page heading, a state dot and text, quiet Pin and Compact icons, and opacity. The rail places SuperOpti to the right of its transparent waveform mark. Minimize sends the window to the taskbar; Close hides it to the system tray; Exit terminates it. Maximize/restore and edge resizing retain native Windows behavior.
 
-## Information architecture
+Normal layout targets a 1020 by 680 logical client minimum with at least four complete contributor rows and a visible plot. Larger layouts cap the table at ten rows instead of filling the window with empty rows. Tables scroll horizontally for endpoint, identity and timestamp columns. Compact mode has a 420 by 488 minimum, four metric cards, the top three contributors, and Stop all. Stop all covers both performance and network recording. Opacity ranges from 50% to 100%, applies only while pinned, returns to 100% when unpinned, and is disabled in high contrast.
 
-- **Overview:** persistent capture/export controls, six comparable percentage trend cards, native top-ten process table, thread/process investigation actions and a compact system pressure strip.
-- **System checks:** an explicit check action previews the machine's pagefile target, three optional reversible settings, an Undo action and separate links to Windows settings. Fix all names its exact scope and requires confirmation; storage, startup and update reviews remain manual.
-- **Settings:** explicit per-user autostart, installation, local capture folder and Exit actions. Copy explains that autostart does not start sampling.
-- **Process detail:** double-click or press Enter on a selected contributor. A focused page requests one detailed report, remembers process creation identity, and offers Back, thread inspection and a separately confirmed ten-second TCP measurement. It does not create an idle refresh loop.
+## Visual and interaction system
 
-Capture controls remain in a stable location on every page. They are disabled appropriately while capturing; Stop is disabled when idle and Export is disabled until data exists. Existing worker messages and reports retain their meaning.
+Static Segoe UI is verified through actual GDI font resolution for regular and semibold weights. Controls and table text use an 11 logical-pixel base, section headings 12, page headings 20 and primary metric values 23. Process icons use 16 pixels within a fixed 20-pixel slot, including reserved space when an icon is unavailable.
 
-The requested fixed pagefile policy uses `max(50% of installed physical RAM, 16 GiB)` with initial and maximum sizes equal. A dedicated **Set fixed pagefile** button applies that policy; **Fix all (3 settings)** includes it alongside animations and power. Confirmation explains administrator rights, the disk-space guard, restart requirements, and saved Undo state. SuperOpti does not elevate or restart Windows automatically. System checks supplies the exact target preview before the user applies a change.
+Charcoal surfaces use restrained rose actions, cyan memory traces, violet GPU traces and amber disk traces. Light mode has its own contrast-tested palette. Buttons, duration segments, panels, combo borders and toggle shapes use antialiased GDI+ rounded geometry. Parent-matched backgrounds prevent rectangular corner artifacts. Disabled actions retain their shape and muted text. Keyboard focus respects Windows UI state; mouse selection does not force a dotted focus rectangle.
 
-## Graph semantics
+The native process/report ListViews provide selection, keyboard navigation and horizontal scrolling. Numeric columns are right-aligned. CPU and pressure-score cells contain quiet proportional bars. Selection is retained by PID and process creation identity during ranking changes, preventing silent substitution after PID reuse. Double-click or Enter opens the selected process. Search filters names and PIDs.
 
-CPU, physical memory, GPU, disk busy, commit and pagefile usage all use a fixed 0–100% scale and a two-minute time window. The window moves only when an actual sample arrives. Early captures show unused space for the remainder of the window rather than stretching two samples across a full history. Missing values break the line and show N/A. Before the first capture, cards explicitly say “Awaiting capture.” No sample values are synthesized or interpolated across missing observations.
+Pin and Compact have explicit accessible names and native tooltips. Sorting, duration, opacity, process search, protocol and grouping controls receive explicit accessibility-property annotations rather than borrowing names from neighboring labels. Executable metadata infotips show the available publisher, version, size and path. Complete screen-reader descriptions of custom graphs remain follow-up work.
 
-Commit is committed memory relative to its limit; pagefile usage is separate from physical RAM. Aggregate disk busy and busiest-engine GPU are not interchangeable with individual process attribution. The table calls its ranking a clue rather than proof of causation. The detail report distinguishes process I/O from network traffic and exposes unavailable network measurements explicitly.
+## Data semantics and workflows
 
-## Native interaction and rendering
+Idle, permission pending, recording, stopped and error states remain distinct. State labels reflect actual application state; retained history alone does not prove successful completion. N/A and Unavailable are distinct from zero. The pressure score is a ranking clue, not proof of causation.
 
-- A Windows report ListView replaces the fixed-width text table. Columns remain legible at native font sizes, scroll horizontally, support row selection and native accessibility, and keep PID as row data rather than reading it from formatted display text.
-- Selection is retained by PID during ranking updates. Process identity is checked using creation time when available before requesting details.
-- All actions use keyboard-focusable native buttons, the sort chooser is a native combo box, and reports are selectable, read-only edit controls.
-- Content uses logical layout units scaled to system DPI. Trend cards and tables expand horizontally; process and report areas use the available height. The minimum window size preserves controls instead of allowing overlap.
-- GDI draws into an offscreen bitmap before one blit; the ListView uses its own double buffering. Only user/window events and actual worker samples invalidate the view. No timer or animation runs while idle.
-- This release is **system-DPI aware**, not per-monitor-DPI aware. Windows may bitmap-scale the window after moving between monitors with different scaling factors. Full custom-chart screen-reader descriptions and high-contrast theme adaptation remain follow-up accessibility work; native process/report data and controls remain accessible.
+Overview presents CPU utilization, physical memory in GiB with percentage/installed capacity, GPU utilization and disk busy, plus actual capture peaks. Logical-processor charts use sampled activity on a common 0–100% scale. Process observed-core cells remain Not captured until execution evidence exists; affinity is not presented as observed execution. Private process commit is not physical swap residency, and process Swap remains Unavailable rather than inventing paged-out byte counts.
 
-## Original icon family
+Graphs retain a bounded 120-second window and explicit elapsed-time labels. Early captures leave the unobserved remainder empty. Missing or nonfinite measurements split traces into separate runs. Shape-preserving antialiased curves pass through observed samples without smoothing away peaks or overshooting adjacent values; they do not connect missing observations. CPU area shading covers only observed runs.
 
-`assets/superopti.svg` is the editable pulse-mark source, and `assets/superopti.png` is the README image. The teal rounded square and white trace signify performance observation, not security certification. `assets/superopti.ico` includes 16, 20, 24, 32, 40, 48, 64, 128 and 256-pixel images for the executable, title bar and idle tray state. The recording icon adds a static amber indicator and uses an explicit active tooltip; no icon animation is required.
+Process details expose structured metrics, threads, connections, files, children and associated services where supported. Executable and file-containing folders can be revealed. A file-folder action requires a selected eligible filesystem path and does not replace or reset the file table. File handles belong to the process; they do not imply ownership by an individual thread.
 
-Assets are original project artwork under the repository MIT license. `python assets/generate_icons.py` reproduces raster/ICO assets using Pillow. Pillow is an optional artwork-generation tool and is not used by the app or its distribution build. The checked-in ICO files are embedded by the Windows SDK resource compiler. The resource version comes from the Cargo package version.
+Traffic history distinguishes live following from archive browsing. Follow live restores the latest bounded rows. Browsing retains its filtered table and totals while a separate footer reports current live-session received/sent totals. Errors and export outcomes remain visible independently of following. Protocol and endpoint labels distinguish TCP/UDP, IPv4/IPv6, local/remote and received/sent data. Recording explicitly requests elevation.
 
-## Validation checklist
+System checks preview current/target values and offer explicit reversible settings. The fixed pagefile policy is max(50% of installed physical RAM, 16 GiB), with equal initial and maximum sizes. Fix all names its exact three-setting scope; startup, storage and update reviews remain manual. Administrator requirements, restart implications and Undo state are explained before applying a fix. Autostart launches quietly without beginning capture.
 
-Compiler, formatting, lint, unit and collector smoke checks are run as part of release integration. Manual UI checks still required before claiming full visual/accessibility QA:
+## Rendering and assets
 
-1. Review idle, warming up, active, stopped and unavailable-counter states at 100%, 150% and 200% scaling.
-2. Resize to the minimum and a wide layout; check column scrolling, read-only report scrolling, focus visibility and tab order.
-3. Select a row, allow its rank to change, and open details with both double-click and Enter; verify PID/creation identity remains correct.
-4. Check both light and dark Windows taskbars at 16/20/24 pixels and verify active/idle tooltips.
-5. Inspect all pages with keyboard-only navigation and Windows Narrator; record the custom-chart accessibility limitation above.
-6. Confirm that closing/minimizing hides to the tray, a stopped capture leaves no sampler active, and Explorer tray recreation restores the correct icon.
+Painting uses an offscreen GDI bitmap, GDI+ antialiased shapes/graphs and a single final blit; native tables use double buffering. Actual worker updates and user/window events trigger repainting. There is no idle animation or sampling timer. DPI changes update fonts, bounds and layout; system theme events update light/dark or high-contrast colors.
 
-A fresh desktop automation attempt during integration failed because the helper repeatedly returned a stale window ID after refresh. The native window launched, but visual/interactive validation remains outstanding; the checklist above is not marked passed.
+The app/tray use the Signal rose waveform on charcoal, and the rail uses a transparent waveform plus the pinned Lucide navigation family. Attribution, license and revision are recorded under assets/lucide. Real executable icons are cached by process identity with a bounded cache. Recording uses a static tray indicator rather than animation.
+
+## Validation evidence and limits
+
+This is scoped engineering and UX evidence, not a blanket accessibility certification:
+
+- The independent visual critic passed the populated Signal 8 dark overview at 1380 by 981 after the latest header, branding, icon-action and antialiased-control changes. No overlap or clipping was observed in that view.
+- Earlier dark and light overview iterations passed their scoped reviews. Signal 6 compact-to-full interaction also passed scoped usability review for three-row density, correct capture state and visible keyboard focus. Later header changes require renewed checks rather than inheriting every earlier result.
+- The independent usability critic passed Signal 9 light branding/header, antialiased controls, colored capture state, icon Compact-to-full interaction and explicit control names. Its separate visual review and untested traffic interactions remain outside that scoped result.
+- Frame 7 maximize/restore was observed on a 5120 by 2112 monitor, restoring the prior window dimensions. Minimize behavior is taskbar minimization; close-to-tray is separate.
+- Formatting and strict all-target clippy checks passed. All 18 current tests passed, including actual font resolution, palette contrast, interpolation sample/peak bounds, PID identity and bounded live traffic evidence.
+- The optimized smoke capture auto-stopped at approximately 10003 ms, manual stop completed promptly, and no idle sampling events were observed.
+
+Remaining review scope includes current-build minimum-size and mixed-DPI behavior at 150%/200%, revised light/compact states, live/paused/error traffic interactions, every process-detail page, complete keyboard/Narrator coverage, taskbar icon sizes and Explorer tray recreation. Release notes identify missing diagnostics separately; a polished overview does not imply that unsupported telemetry exists.

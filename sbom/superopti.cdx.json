@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:b8145f12-04f5-45e9-919c-8e12f95f115d",
+  "serialNumber": "urn:uuid:a938e83b-fd1a-4919-be84-d88ccfe6f46b",
   "metadata": {
-    "timestamp": "2026-09-14T19:32:04Z",
+    "timestamp": "2026-09-14T22:46:59Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -18,9 +18,9 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "pkg:generic/superopti@0.2.0",
+      "bom-ref": "pkg:generic/superopti@0.3.0",
       "name": "superopti",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "On-demand native Windows performance diagnostics",
       "scope": "required",
       "licenses": [
@@ -28,31 +28,31 @@
           "expression": "MIT"
         }
       ],
-      "purl": "pkg:generic/superopti@0.2.0",
+      "purl": "pkg:generic/superopti@0.3.0",
       "components": [
         {
           "type": "application",
-          "bom-ref": "pkg:generic/superopti@0.2.0#cargo-target-0",
+          "bom-ref": "pkg:generic/superopti@0.3.0#cargo-target-0",
           "name": "superopti",
-          "version": "0.2.0",
-          "purl": "pkg:generic/superopti@0.2.0"
+          "version": "0.3.0",
+          "purl": "pkg:generic/superopti@0.3.0"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ab900ceb91a8e4a15449273613147ec7f5702d5be996a4e84e4152b794609b15"
+          "content": "ce6b450bca1943e293ab402af6549eb37ecd3eee58ee38c0a9b6f8b85cb2eb39"
         }
       ]
     },
     "properties": [
       {
         "name": "superopti:source-fingerprint-sha256",
-        "value": "3195034c13a73ec7e46702eb6d6ce95d38249a4ef4dece8d9895a83ac2f22946"
+        "value": "6067d47a490e52cb86e2bfe6a73ba3e4bb989f738cd48670a03eed292bd1f65b"
       },
       {
         "name": "superopti:base-git-commit",
-        "value": "a7e4bfb01ae265ef1b1fe8fe44500911b1725833"
+        "value": "380dd4944c3d5faa9f118aa7eb064d01232d6284"
       },
       {
         "name": "superopti:tracked-worktree-dirty",
@@ -1084,6 +1084,260 @@
       ]
     },
     {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/arrow-left-right.svg",
+      "name": "Lucide arrow-left-right",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/arrow-left-right.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2d64da427cbb3f14e522658459903829575b09ec15162c1a69ea6ad341a4359a"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/audio-lines.svg",
+      "name": "Lucide audio-lines",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/audio-lines.svg",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3942b8a5d6bccc927a55f857f0d44b90e2663470cd2d569000c9b60c37578dfa"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted icon embedded in executable and shipped as SVG, PNG and ICO"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/chart-no-axes-column.svg",
+      "name": "Lucide chart-no-axes-column",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/chart-no-axes-column.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5dfd8fc5b5417dad858991de4969c3fe1c4a466104d0880a15b691ff7c5b1f12"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/cpu.svg",
+      "name": "Lucide cpu",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/cpu.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ec83bb69ec029d367d749afc445b39c8e95891ebf99b0400652677c2b149b99c"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/layout-dashboard.svg",
+      "name": "Lucide layout-dashboard",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/layout-dashboard.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/minimize-2.svg",
+      "name": "Lucide minimize-2",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/minimize-2.svg",
+      "licenses": [
+        {
+          "expression": "ISC AND MIT"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1150437d5a870321c59b7ebca2e1bc3f6227f0fa03dd10484ab384dfe5110739"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/network.svg",
+      "name": "Lucide network",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/network.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "626be730feea1e5ea7539fbf78b4a3fcb927ce5d7dc43364f2216908672ac792"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/pin.svg",
+      "name": "Lucide pin",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/pin.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "55e8e5e04bcb671179fc1dd589abf09cf6a1e71301ff14eb739419cfab6011e7"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/settings-2.svg",
+      "name": "Lucide settings-2",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/settings-2.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "06d06c191bd7eb28afaf9d40acb5c49ef69448fdeda91801d9823d7c440a4e10"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/shield-check.svg",
+      "name": "Lucide shield-check",
+      "version": "58ef6830c6fdf6374b751ab28b147a921bd31b34",
+      "purl": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/shield-check.svg",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8d4fcdbde5bba4abb1a2f6fe53e37ceb6343a1d5449a9d88f6f97c1971d26c4e"
+        }
+      ],
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Adapted native GDI stroke geometry; pinned source SVG included"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:superopti:windows-import:advapi32.dll",
+      "name": "advapi32.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
       "type": "library",
       "bom-ref": "urn:superopti:windows-import:api-ms-win-core-synch-l1-2-0.dll",
       "name": "api-ms-win-core-synch-l1-2-0.dll",
@@ -1181,6 +1435,18 @@
     },
     {
       "type": "library",
+      "bom-ref": "urn:superopti:windows-import:combase.dll",
+      "name": "combase.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "urn:superopti:windows-import:comctl32.dll",
       "name": "comctl32.dll",
       "scope": "required",
@@ -1193,8 +1459,32 @@
     },
     {
       "type": "library",
+      "bom-ref": "urn:superopti:windows-import:dwmapi.dll",
+      "name": "dwmapi.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "urn:superopti:windows-import:gdi32.dll",
       "name": "gdi32.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:superopti:windows-import:gdiplus.dll",
+      "name": "gdiplus.dll",
       "scope": "required",
       "properties": [
         {
@@ -1231,6 +1521,18 @@
       "type": "library",
       "bom-ref": "urn:superopti:windows-import:ntdll.dll",
       "name": "ntdll.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:superopti:windows-import:ole32.dll",
+      "name": "ole32.dll",
       "scope": "required",
       "properties": [
         {
@@ -1313,8 +1615,44 @@
     },
     {
       "type": "library",
+      "bom-ref": "urn:superopti:windows-import:uxtheme.dll",
+      "name": "uxtheme.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "urn:superopti:windows-import:vcruntime140.dll",
       "name": "vcruntime140.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:superopti:windows-import:version.dll",
+      "name": "version.dll",
+      "scope": "required",
+      "properties": [
+        {
+          "name": "superopti:delivery",
+          "value": "Windows-provided direct PE import; not bundled; version varies with user's OS servicing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "urn:superopti:windows-import:ws2_32.dll",
+      "name": "ws2_32.dll",
       "scope": "required",
       "properties": [
         {
@@ -1326,12 +1664,23 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:generic/superopti@0.2.0",
+      "ref": "pkg:generic/superopti@0.3.0",
       "dependsOn": [
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/windows@0.62.2",
         "pkg:generic/rust-std@1.97.1?target=x86_64-pc-windows-msvc",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/audio-lines.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/arrow-left-right.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/chart-no-axes-column.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/cpu.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/layout-dashboard.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/minimize-2.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/network.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/pin.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/settings-2.svg",
+        "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/shield-check.svg",
+        "urn:superopti:windows-import:advapi32.dll",
         "urn:superopti:windows-import:api-ms-win-core-synch-l1-2-0.dll",
         "urn:superopti:windows-import:api-ms-win-crt-heap-l1-1-0.dll",
         "urn:superopti:windows-import:api-ms-win-crt-locale-l1-1-0.dll",
@@ -1340,18 +1689,25 @@
         "urn:superopti:windows-import:api-ms-win-crt-stdio-l1-1-0.dll",
         "urn:superopti:windows-import:api-ms-win-crt-string-l1-1-0.dll",
         "urn:superopti:windows-import:bcryptprimitives.dll",
+        "urn:superopti:windows-import:combase.dll",
         "urn:superopti:windows-import:comctl32.dll",
+        "urn:superopti:windows-import:dwmapi.dll",
         "urn:superopti:windows-import:gdi32.dll",
+        "urn:superopti:windows-import:gdiplus.dll",
         "urn:superopti:windows-import:iphlpapi.dll",
         "urn:superopti:windows-import:kernel32.dll",
         "urn:superopti:windows-import:ntdll.dll",
+        "urn:superopti:windows-import:ole32.dll",
         "urn:superopti:windows-import:oleaut32.dll",
         "urn:superopti:windows-import:pdh.dll",
         "urn:superopti:windows-import:powrprof.dll",
         "urn:superopti:windows-import:psapi.dll",
         "urn:superopti:windows-import:shell32.dll",
         "urn:superopti:windows-import:user32.dll",
-        "urn:superopti:windows-import:vcruntime140.dll"
+        "urn:superopti:windows-import:uxtheme.dll",
+        "urn:superopti:windows-import:vcruntime140.dll",
+        "urn:superopti:windows-import:version.dll",
+        "urn:superopti:windows-import:ws2_32.dll"
       ]
     },
     {
@@ -1507,6 +1863,50 @@
       "dependsOn": []
     },
     {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/audio-lines.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/arrow-left-right.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/chart-no-axes-column.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/cpu.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/layout-dashboard.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/minimize-2.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/network.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/pin.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/settings-2.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/lucide-icons/lucide@58ef6830c6fdf6374b751ab28b147a921bd31b34#icons/shield-check.svg",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:superopti:windows-import:advapi32.dll",
+      "dependsOn": []
+    },
+    {
       "ref": "urn:superopti:windows-import:api-ms-win-core-synch-l1-2-0.dll",
       "dependsOn": []
     },
@@ -1539,11 +1939,23 @@
       "dependsOn": []
     },
     {
+      "ref": "urn:superopti:windows-import:combase.dll",
+      "dependsOn": []
+    },
+    {
       "ref": "urn:superopti:windows-import:comctl32.dll",
       "dependsOn": []
     },
     {
+      "ref": "urn:superopti:windows-import:dwmapi.dll",
+      "dependsOn": []
+    },
+    {
       "ref": "urn:superopti:windows-import:gdi32.dll",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:superopti:windows-import:gdiplus.dll",
       "dependsOn": []
     },
     {
@@ -1556,6 +1968,10 @@
     },
     {
       "ref": "urn:superopti:windows-import:ntdll.dll",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:superopti:windows-import:ole32.dll",
       "dependsOn": []
     },
     {
@@ -1583,7 +1999,19 @@
       "dependsOn": []
     },
     {
+      "ref": "urn:superopti:windows-import:uxtheme.dll",
+      "dependsOn": []
+    },
+    {
       "ref": "urn:superopti:windows-import:vcruntime140.dll",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:superopti:windows-import:version.dll",
+      "dependsOn": []
+    },
+    {
+      "ref": "urn:superopti:windows-import:ws2_32.dll",
       "dependsOn": []
     }
   ],
@@ -1591,7 +2019,7 @@
     {
       "aggregate": "incomplete",
       "assemblies": [
-        "pkg:generic/superopti@0.2.0"
+        "pkg:generic/superopti@0.3.0"
       ]
     }
   ]

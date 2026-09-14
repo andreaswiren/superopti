@@ -247,57 +247,70 @@ fn unavailable(code: u32) -> String {
 fn amount(v: u64) -> String {
     format!("{v} bytes ({:.2} MiB)", v as f64 / 1048576.0)
 }
-pub fn snapshot(pid: u32) -> String {
+pub fn snapshot(pid: u32) -> crate::model::Report {
     let (list, errors) = connections(pid);
-    let mut report = String::from(
-        "NETWORK CONNECTIONS / point-in-time snapshot\r\nIN = remote peer to local endpoint; OUT = local endpoint to remote peer.\r\nIP addresses and ports are shown without generating DNS traffic. TCP totals below are since EStats was enabled, not necessarily since the process or connection started.\r\n\r\n",
+    let mut report = crate::model::Report::new(
+        format!("Connections · PID {pid}"),
+        &[
+            "Protocol",
+            "Local endpoint",
+            "Remote endpoint",
+            "State",
+            "Received",
+            "Sent",
+        ],
     );
-    if list.is_empty() {
-        report.push_str("No TCP endpoints found for this PID at the time of the snapshot.\r\n");
-    }
+    report.metric("TCP endpoints", list.len());
+    report.metric("Accounting", "Since enabled");
+    report.metric("UDP peers", "Unavailable");
+    report.metric("DNS lookup", "Off");
     for c in list.iter().take(256) {
-        report.push_str(&format!(
-            "TCP  {}  <->  {}  [{}]\r\n",
-            c.local,
-            c.remote,
-            state_name(c.state)
-        ));
-        match read(&c.row){Ok(Some(v))=>report.push_str(&format!("  IN {}  |  OUT {}\r\n",amount(v.incoming),amount(v.outgoing))),Ok(None)=>report.push_str("  IN N/A  |  OUT N/A - byte counters are not enabled; use Measure TCP traffic.\r\n"),Err(code)=>report.push_str(&format!("  IN / OUT {}\r\n",unavailable(code)))}
+        let (incoming, outgoing) = match read(&c.row) {
+            Ok(Some(v)) => (amount(v.incoming), amount(v.outgoing)),
+            Ok(None) => ("N/A · disabled".into(), "N/A · disabled".into()),
+            Err(code) => (unavailable(code), "N/A".into()),
+        };
+        report.row(&[
+            "TCP",
+            &c.local,
+            &c.remote,
+            state_name(c.state),
+            &incoming,
+            &outgoing,
+        ]);
     }
-    if list.len() > 256 {
-        report.push_str("Only the first 256 TCP endpoints are displayed.\r\n");
-    }
-    for e in errors {
-        report.push_str(&format!("{e}\r\n"));
-    }
-    report.push_str("\r\nUDP SOCKETS / includes QUIC-capable sockets\r\nWindows UDP tables expose local sockets only: remote peers and byte totals are N/A. UDP flow tracking requires a separate event/packet tracing backend and is not implemented.\r\n");
-    let mut count = 0;
     match table::<MIB_UDPROW_OWNER_PID>(true, 2) {
         Ok(rows) => {
             for r in rows.into_iter().filter(|r| r.dwOwningPid == pid).take(128) {
-                report.push_str(&format!(
-                    "UDP {}  |  remote N/A  |  IN / OUT N/A\r\n",
-                    v4(r.dwLocalAddr, r.dwLocalPort)
-                ));
-                count += 1;
+                report.row(&[
+                    "UDP",
+                    &v4(r.dwLocalAddr, r.dwLocalPort),
+                    "Unavailable",
+                    "Local socket",
+                    "N/A",
+                    "N/A",
+                ]);
             }
         }
-        Err(e) => report.push_str(&format!("UDP IPv4: {e}\r\n")),
+        Err(e) => report.row(&["UDP IPv4", "Unavailable", &e, "Error", "N/A", "N/A"]),
     }
     match table::<MIB_UDP6ROW_OWNER_PID>(true, 23) {
         Ok(rows) => {
             for r in rows.into_iter().filter(|r| r.dwOwningPid == pid).take(128) {
-                report.push_str(&format!(
-                    "UDP {}  |  remote N/A  |  IN / OUT N/A\r\n",
-                    v6(r.ucLocalAddr, r.dwLocalScopeId, r.dwLocalPort)
-                ));
-                count += 1;
+                report.row(&[
+                    "UDP v6",
+                    &v6(r.ucLocalAddr, r.dwLocalScopeId, r.dwLocalPort),
+                    "Unavailable",
+                    "Local socket",
+                    "N/A",
+                    "N/A",
+                ]);
             }
         }
-        Err(e) => report.push_str(&format!("UDP IPv6: {e}\r\n")),
+        Err(e) => report.row(&["UDP IPv6", "Unavailable", &e, "Error", "N/A", "N/A"]),
     }
-    if count == 0 {
-        report.push_str("No UDP sockets were returned.\r\n");
+    for e in errors {
+        report.row(&["TCP", "Unavailable", &e, "Error", "N/A", "N/A"]);
     }
     report
 }
@@ -318,7 +331,7 @@ impl Drop for Track {
         }
     }
 }
-pub fn measure(pid: u32, expected: Option<u64>) -> Result<String, String> {
+pub fn measure(pid: u32, expected: Option<u64>) -> Result<crate::model::Report, String> {
     let identity = crate::native::ProcessIdentity::open(pid, expected)?;
     let start = Instant::now();
     let mut tracks: BTreeMap<String, Track> = BTreeMap::new();
@@ -393,49 +406,93 @@ pub fn measure(pid: u32, expected: Option<u64>) -> Result<String, String> {
         }
         std::thread::sleep(Duration::from_secs(1));
     }
-    let mut report = format!(
-        "TCP TRAFFIC / PID {pid} / {:.1}-second observation\r\nIN = received; OUT = sent. TCP payload bytes include retransmissions, exclude headers. These are observed deltas, not historical totals.\r\nConnections are polled once per second (max 256). Short-lived flows between polls and the final bytes of closed flows can be missed; totals are lower bounds. UDP/QUIC remote peers and byte counts are not supported by this backend.\r\n\r\n",
-        start.elapsed().as_secs_f64()
+    let mut report = crate::model::Report::new(
+        format!("TCP traffic · PID {pid}"),
+        &[
+            "Protocol",
+            "Local endpoint",
+            "Remote endpoint",
+            "Status",
+            "Received",
+            "Sent",
+        ],
     );
     let mut sums = (0u64, 0u64, 0usize);
     for t in tracks.values_mut() {
-        report.push_str(&format!("TCP {} <-> {}\r\n", t.c.local, t.c.remote));
-        if t.readings > 0 {
-            report.push_str(&format!(
-                "  IN {}  |  OUT {}  |  last observed at {}s\r\n",
-                amount(t.incoming),
-                amount(t.outgoing),
-                t.last_seen
-            ));
+        let (incoming, outgoing) = if t.readings > 0 {
             sums.0 = sums.0.saturating_add(t.incoming);
             sums.1 = sums.1.saturating_add(t.outgoing);
             sums.2 += 1;
+            (amount(t.incoming), amount(t.outgoing))
         } else {
-            report.push_str("  IN N/A  |  OUT N/A\r\n");
-        }
+            ("N/A".into(), "N/A".into())
+        };
         if t.changed {
-            match enable(&t.c.row,false){Ok(())=>{t.changed=false;t.status.push_str("; temporary counters disabled");},Err(1168|87)=>{t.changed=false;t.status.push_str("; connection already closed");},Err(code)=>t.status.push_str(&format!("; cleanup failed (Windows {code}); counters may remain enabled until this connection closes"))}
+            match enable(&t.c.row, false) {
+                Ok(()) => {
+                    t.changed = false;
+                    t.status.push_str("; restored");
+                }
+                Err(1168 | 87) => {
+                    t.changed = false;
+                    t.status.push_str("; closed");
+                }
+                Err(code) => t.status.push_str(&format!("; cleanup failed ({code})")),
+            }
         }
-        report.push_str(&format!("  {}\r\n", t.status));
+        report.row(&[
+            "TCP",
+            &t.c.local,
+            &t.c.remote,
+            &t.status,
+            &incoming,
+            &outgoing,
+        ]);
     }
-    if tracks.is_empty() {
-        report.push_str("No established TCP connections were observed.\r\n");
-    }
-    if sums.2 > 0 {
-        report.push_str(&format!(
-            "\r\nObserved process TCP totals across {} readable connections: IN {} | OUT {}\r\n",
-            sums.2,
-            amount(sums.0),
+    report.metric(
+        "Received",
+        if sums.2 > 0 {
+            amount(sums.0)
+        } else {
+            "N/A".into()
+        },
+    );
+    report.metric(
+        "Sent",
+        if sums.2 > 0 {
             amount(sums.1)
-        ));
-    } else {
-        report.push_str("\r\nNo readable byte counters: total IN / OUT is N/A, not zero. To enable collection, exit SuperOpti and run it as administrator, then repeat this measurement.\r\n");
-    }
+        } else {
+            "N/A".into()
+        },
+    );
+    report.metric("Measured flows", sums.2);
+    report.metric(
+        "Observation",
+        format!("{:.1} s", start.elapsed().as_secs_f64()),
+    );
     errors.sort();
     errors.dedup();
-    for e in errors {
-        report.push_str(&format!("{e}\r\n"));
+    for error in errors {
+        report.row(&["Notice", "", "", &error, "N/A", "N/A"]);
     }
+    if sums.2 == 0 {
+        report.row(&[
+            "Access",
+            "",
+            "",
+            "No readable counters; administrator rights may be required",
+            "N/A",
+            "N/A",
+        ]);
+    }
+    report.row(&[
+        "Coverage",
+        "1 s polling",
+        "TCP only",
+        "Lower bounds; short/closed flows may be missed",
+        "UDP/QUIC N/A",
+        "No history",
+    ]);
     Ok(report)
 }
 #[cfg(test)]

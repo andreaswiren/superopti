@@ -83,6 +83,8 @@ impl NativeMonitor {
                 },
                 ram: memory_ok.then_some(memory.dwMemoryLoad as f64),
                 total_ram_mb: memory.ullTotalPhys as f64 / 1048576.0,
+                commit_limit_mb: perf_ok
+                    .then_some(perf.CommitLimit as f64 * perf.PageSize as f64 / 1048576.),
                 commit: (perf_ok && perf.CommitLimit > 0)
                     .then(|| 100.0 * perf.CommitTotal as f64 / perf.CommitLimit as f64),
                 ..Default::default()
@@ -105,6 +107,7 @@ impl NativeMonitor {
                         .unwrap_or(entry.szExeFile.len());
                     let mut p = Process {
                         pid,
+                        parent_pid: entry.th32ParentProcessID,
                         name: String::from_utf16_lossy(&entry.szExeFile[..end]),
                         threads: Some(entry.cntThreads as f64),
                         ..Default::default()
@@ -152,18 +155,19 @@ impl NativeMonitor {
                             }
                             next.insert(pid, reading);
                         }
-                        let mut mem = PROCESS_MEMORY_COUNTERS {
-                            cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+                        let mut mem = PROCESS_MEMORY_COUNTERS_EX {
+                            cb: size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
                             ..Default::default()
                         };
                         if GetProcessMemoryInfo(
                             h.0,
-                            &mut mem,
-                            size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+                            (&mut mem as *mut PROCESS_MEMORY_COUNTERS_EX).cast(),
+                            size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
                         )
                         .is_ok()
                         {
                             p.ram_mb = Some(mem.WorkingSetSize as f64 / 1048576.0);
+                            p.commit_mb = Some(mem.PrivateUsage as f64 / 1048576.);
                         }
                         let mut count = 0;
                         if GetProcessHandleCount(h.0, &mut count).is_ok() {
@@ -181,7 +185,7 @@ impl NativeMonitor {
     }
 }
 
-pub fn thread_report(pid: u32) -> Result<String, String> {
+pub fn thread_report(pid: u32) -> Result<crate::model::Report, String> {
     unsafe {
         let snapshot =
             Owned(CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0).map_err(|e| e.to_string())?);
@@ -233,17 +237,30 @@ pub fn thread_report(pid: u32) -> Result<String, String> {
             }
         }
         rows.sort_by(|a, b| (b.2 + b.3).total_cmp(&(a.2 + a.3)));
-        let mut report = format!(
-            "THREAD SNAPSHOT / PID {pid}\r\n2-second native sample. CPU is % of ONE logical processor. Top 40 readable threads.\r\nThreads created after snapshot are not included. Protected threads may be unavailable.\r\n\r\n       TID   CPU %   Kernel %   User %  Base priority  Exited\r\n"
+        let mut report = crate::model::Report::new(
+            format!("Threads · PID {pid}"),
+            &[
+                "Thread ID",
+                "CPU %",
+                "Kernel %",
+                "User %",
+                "Base priority",
+                "State",
+            ],
         );
-        if rows.is_empty() {
-            report.push_str("No readable threads: process exited, PID was not found, or access was restricted.\r\n");
-        }
+        report.metric("Readable threads", rows.len());
+        report.metric("Sample", format!("{seconds:.1} s"));
+        report.metric("CPU scale", "1 logical core");
+        report.metric("Displayed", rows.len().min(40));
         for (tid, priority, k, u, exited) in rows.iter().take(40) {
-            report.push_str(&format!(
-                "{tid:>10} {:>7.2} {k:>10.2} {u:>8.2} {priority:>14}  {exited}\r\n",
-                k + u
-            ));
+            report.row(&[
+                &tid.to_string(),
+                &format!("{:.2}", k + u),
+                &format!("{k:.2}"),
+                &format!("{u:.2}"),
+                &priority.to_string(),
+                if *exited { "Exited" } else { "Running" },
+            ]);
         }
         Ok(report)
     }
@@ -255,6 +272,20 @@ pub struct ProcessIdentity {
     pub created_ticks: u64,
 }
 impl ProcessIdentity {
+    pub fn image_path(&self) -> Result<String, String> {
+        unsafe {
+            let mut value = vec![0u16; 32768];
+            let mut size = value.len() as u32;
+            QueryFullProcessImageNameW(
+                self.handle.0,
+                PROCESS_NAME_WIN32,
+                windows::core::PWSTR(value.as_mut_ptr()),
+                &mut size,
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(String::from_utf16_lossy(&value[..size as usize]))
+        }
+    }
     pub fn open(pid: u32, expected: Option<u64>) -> Result<Self, String> {
         unsafe {
             let handle = Owned(
@@ -331,7 +362,7 @@ fn process_stats(h: HANDLE) -> Result<ProcessStats, String> {
         })
     }
 }
-pub fn process_report(pid: u32, expected: Option<u64>) -> Result<String, String> {
+pub fn process_report(pid: u32, expected: Option<u64>) -> Result<crate::model::Report, String> {
     unsafe {
         let identity = ProcessIdentity::open(pid, expected)?;
         let mut name = vec![0u16; 32768];
@@ -376,57 +407,152 @@ pub fn process_report(pid: u32, expected: Option<u64>) -> Result<String, String>
             valid = Process32NextW(snapshot.0, &mut entry).is_ok();
         }
         let priority = GetPriorityClass(identity.handle.0);
-        let mut report = format!(
-            "PROCESS DETAILS / PID {pid}\r\n{image}\r\n\r\nStatus: {}   |   Parent PID: {}   |   Created: Unix UTC {created}\r\nIdentity is pinned to process creation time. This is a {:.1}s on-demand snapshot, not a continuously running trace.\r\n\r\nCPU (whole-machine capacity): {:.2}%   |   kernel {:.2}%   |   user {:.2}%\r\nLifetime CPU: kernel {:.2}s / user {:.2}s\r\nThreads: {}   |   Handles: {}   |   Priority class: 0x{priority:04x}\r\n",
-            if identity.running() {
-                "running"
-            } else {
-                "exited"
-            },
-            parent
-                .map(|v| v.to_string())
+        let mut report = crate::model::Report::new(
+            format!("Process · PID {pid}"),
+            &["Category", "Metric", "Value", "Scope"],
+        );
+        let mib = |v: usize| format!("{:.1} MiB", v as f64 / 1048576.0);
+        report.metric("CPU", format!("{:.2}%", (kernel + user).clamp(0.0, 100.0)));
+        report.metric(
+            "Memory",
+            last.memory
+                .map(|v| mib(v.WorkingSetSize))
                 .unwrap_or_else(|| "N/A".into()),
-            duration,
-            (kernel + user).clamp(0.0, 100.0),
-            kernel,
-            user,
-            last.kernel as f64 / 1e7,
-            last.user as f64 / 1e7,
+        );
+        report.metric(
+            "Threads",
             thread_count
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "N/A".into()),
+        );
+        report.metric(
+            "Handles",
             last.handles
                 .map(|v| v.to_string())
-                .unwrap_or_else(|| "N/A".into())
+                .unwrap_or_else(|| "N/A".into()),
         );
+        report.row(&[
+            "Identity",
+            "PID",
+            &pid.to_string(),
+            if identity.running() {
+                "Running"
+            } else {
+                "Exited"
+            },
+        ]);
+        report.row(&["Identity", "Executable", &image, "Windows process image"]);
+        report.row(&[
+            "Identity",
+            "Parent PID",
+            &parent
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "N/A".into()),
+            "Snapshot",
+        ]);
+        report.row(&[
+            "Identity",
+            "Created",
+            &created.to_string(),
+            "Unix UTC seconds",
+        ]);
+        report.row(&[
+            "CPU",
+            "Kernel",
+            &format!("{kernel:.2}%"),
+            "Whole-machine capacity",
+        ]);
+        report.row(&[
+            "CPU",
+            "User",
+            &format!("{user:.2}%"),
+            "Whole-machine capacity",
+        ]);
+        report.row(&[
+            "CPU",
+            "Kernel lifetime",
+            &format!("{:.2} s", last.kernel as f64 / 1e7),
+            "Lifetime",
+        ]);
+        report.row(&[
+            "CPU",
+            "User lifetime",
+            &format!("{:.2} s", last.user as f64 / 1e7),
+            "Lifetime",
+        ]);
+        report.row(&[
+            "CPU",
+            "Priority class",
+            &format!("0x{priority:04x}"),
+            "Windows class",
+        ]);
         if let Some(memory) = last.memory {
-            report.push_str(&format!("\r\nMEMORY\r\nWorking set: {:.2} MiB   |   Peak working set: {:.2} MiB\r\nPrivate committed bytes: {:.2} MiB   |   Peak pagefile/commit charge: {:.2} MiB\r\nPage faults (soft + hard, lifetime): {}\r\n",memory.WorkingSetSize as f64/1048576.0,memory.PeakWorkingSetSize as f64/1048576.0,memory.PrivateUsage as f64/1048576.0,memory.PeakPagefileUsage as f64/1048576.0,memory.PageFaultCount));
-        } else {
-            report.push_str(
-                "\r\nMEMORY: N/A - process memory is access restricted or the process exited.\r\n",
-            );
+            for (label, value) in [
+                ("Working set", memory.WorkingSetSize),
+                ("Peak working set", memory.PeakWorkingSetSize),
+                ("Private commit", memory.PrivateUsage),
+                ("Peak commit", memory.PeakPagefileUsage),
+            ] {
+                report.row(&["Memory", label, &mib(value), "Process"]);
+            }
+            report.row(&[
+                "Memory",
+                "Page faults",
+                &memory.PageFaultCount.to_string(),
+                "Soft + hard; lifetime",
+            ]);
         }
         if let Some(io) = last.io {
-            report.push_str(&format!("\r\nPROCESS I/O / includes file, network and device I/O; not disk-only or network-only\r\nREAD / IN: {} bytes ({:.2} MiB), {} operations\r\nWRITE / OUT: {} bytes ({:.2} MiB), {} operations\r\nOTHER: {} bytes, {} operations\r\n",io.ReadTransferCount,io.ReadTransferCount as f64/1048576.0,io.ReadOperationCount,io.WriteTransferCount,io.WriteTransferCount as f64/1048576.0,io.WriteOperationCount,io.OtherTransferCount,io.OtherOperationCount));
-            if let Some(old) = first.io {
-                report.push_str(&format!(
-                    "Sample rates: READ / IN {:.3} MiB/s   |   WRITE / OUT {:.3} MiB/s\r\n",
-                    io.ReadTransferCount.saturating_sub(old.ReadTransferCount) as f64
-                        / 1048576.0
-                        / duration,
-                    io.WriteTransferCount.saturating_sub(old.WriteTransferCount) as f64
-                        / 1048576.0
-                        / duration
-                ));
+            for (label, bytes, ops) in [
+                ("Read / IN", io.ReadTransferCount, io.ReadOperationCount),
+                ("Write / OUT", io.WriteTransferCount, io.WriteOperationCount),
+                ("Other", io.OtherTransferCount, io.OtherOperationCount),
+            ] {
+                report.row(&[
+                    "I/O",
+                    label,
+                    &format!("{bytes} bytes"),
+                    &format!("{ops} operations; files + network + devices"),
+                ]);
             }
-        } else {
-            report.push_str("\r\nPROCESS I/O: N/A - counters unavailable.\r\n");
+            if let Some(old) = first.io {
+                for (label, bytes) in [
+                    (
+                        "Read / IN rate",
+                        io.ReadTransferCount.saturating_sub(old.ReadTransferCount),
+                    ),
+                    (
+                        "Write / OUT rate",
+                        io.WriteTransferCount.saturating_sub(old.WriteTransferCount),
+                    ),
+                ] {
+                    report.row(&[
+                        "I/O",
+                        label,
+                        &format!("{:.3} MiB/s", bytes as f64 / 1048576.0 / duration),
+                        &format!("{duration:.1} s sample"),
+                    ]);
+                }
+            }
         }
-        report.push_str("\r\n");
-        if identity.running() {
-            report.push_str(&crate::network::snapshot(pid));
-        } else {
-            report.push_str("NETWORK: process exited; no replacement PID was inspected.\r\n");
+        match crate::inspect::services(pid, Some(identity.created_ticks)) {
+            Ok(services) if services.rows.is_empty() => report.row(&[
+                "Identity",
+                "Windows services",
+                "None associated",
+                "Service Control Manager",
+            ]),
+            Ok(services) => {
+                for service in services.rows {
+                    report.row(&["Service", &service[0], &service[1], &service[3]]);
+                }
+            }
+            Err(_) => report.row(&[
+                "Identity",
+                "Windows services",
+                "Unavailable",
+                "Service Control Manager query failed",
+            ]),
         }
         Ok(report)
     }

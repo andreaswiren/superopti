@@ -1,4 +1,4 @@
-param([ValidateSet('Check','Apply','Undo')][string]$Mode = 'Check')
+param([ValidateSet('Check','Apply','Undo','Inspect')][string]$Mode = 'Check')
 $ErrorActionPreference = 'Stop'
 $memoryKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
 $backupKey = 'HKLM:\SOFTWARE\SuperOpti'
@@ -50,6 +50,10 @@ $growth = [math]::Max([double]0, [double]$target * 1MB - $allocated)
 $reserve = [math]::Max([double]2GB, [double]$disk.Size * 0.05)
 $spaceOK = $null -ne $disk -and $disk.DriveType -eq 3 -and ([double]$disk.FreeSpace - $growth) -ge $reserve
 $matched = -not $system.AutomaticManagedPagefile -and $entries.Count -eq 1 -and $entries[0] -eq $desired
+if ($Mode -eq 'Inspect') {
+    [pscustomobject]@{matched=$matched;targetMiB=$target;installedGiB=($ram/1GB);path=$path;automatic=[bool]$system.AutomaticManagedPagefile;allocatedMiB=($allocated/1MB);spaceOK=$spaceOK;supported=$supported;growthGiB=($growth/1GB);reserveGiB=($reserve/1GB)} | ConvertTo-Json -Compress
+    return
+}
 $state = if ($matched) {'OK'} else {'REVIEW'}
 "$state`: Fixed pagefile policy: $target MiB ($($target/1024) GiB), initial = maximum; installed RAM $([math]::Round($ram/1GB,2)) GiB. Target: $path."
 "Configured: $($entries -join '; '); automatic management: $($system.AutomaticManagedPagefile). Running allocation: $([math]::Round($allocated/1MB)) MiB (may differ until restart)."
