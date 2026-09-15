@@ -182,7 +182,6 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
         ("Handles", 80),
         ("Score", 66),
         ("Observed cores", 124),
-        ("Swap", 108),
     ]
     .iter()
     .enumerate()
@@ -423,6 +422,40 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
 }
 
 fn display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
+    if app.page == 3
+        && !app.process_picker
+        && !app.detail_pending
+        && app.process_tab == 0
+        && app.detail_pid.is_some()
+    {
+        let mut report = app.presentation.clone();
+        report.row(&[
+            "Memory",
+            "Actual swapped-out bytes",
+            "Not exposed by supported process counters",
+            "Private commit includes RAM and pagefile backing; commit minus RAM is not swap",
+        ]);
+        report.row(&[
+            "CPU",
+            "Observed logical CPU indexes",
+            &observed_cores(app, app.detail_pid.unwrap_or(0), app.detail_created),
+            &app.core_observation.title,
+        ]);
+        if let Some(time) = app
+            .core_observation
+            .metrics
+            .iter()
+            .find(|m| m.label == "Completed UTC")
+        {
+            report.row(&[
+                "CPU",
+                "Observation completed",
+                &time.value,
+                "5-second window; not current affinity",
+            ]);
+        }
+        return std::borrow::Cow::Owned(report);
+    }
     if app.page == 3 && app.detail_pending {
         let mut report = model::Report::new(
             format!(
@@ -570,6 +603,10 @@ fn geometry(width: i32) -> (i32, i32, i32) {
     (origin, origin + 156, shell - 180)
 }
 
+fn contributor_search_width(content: i32) -> i32 {
+    (content - 650).clamp(168, 220)
+}
+
 pub unsafe fn layout(app: &App, hwnd: HWND) {
     // Live samples must not resize or reset an open selection popup.
     if app.controls.iter().any(|&(h, ..)| {
@@ -581,6 +618,13 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
     theme::set_page(app.page);
     let mut r = RECT::default();
     let _ = GetClientRect(hwnd, &mut r);
+    let dc = GetDC(Some(hwnd));
+    let previous_font = SelectObject(dc, app.font.into());
+    let mut search_metrics = TEXTMETRICW::default();
+    let _ = GetTextMetricsW(dc, &mut search_metrics);
+    SelectObject(dc, previous_font);
+    ReleaseDC(Some(hwnd), dc);
+    let search_height = ((search_metrics.tmHeight as f64 / app.scale).ceil() as i32).clamp(11, 24);
     let width = (r.right as f64 / app.scale) as i32;
     let height = (r.bottom as f64 / app.scale) as i32 - 28;
     let (origin, x, content) = if app.compact {
@@ -589,7 +633,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
         geometry(width)
     };
     let table_y = if app.compact { 286 } else { 284 };
-    let widths = [160, 62, 68, 88, 96, 94, 68, 76, 84, 68, 124, 108];
+    let widths = [160, 62, 68, 88, 96, 94, 68, 76, 84, 68, 124];
     let table_was_visible = IsWindowVisible(app.table).as_bool();
     let sizing_header = HWND(SendMessageW(app.table, LVM_GETHEADER, None, None).0 as *mut _);
     SendMessageW(app.table, WM_SETREDRAW, Some(WPARAM(0)), None);
@@ -637,7 +681,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 304 => matches!(app.page, 3 | 6),
                 281 => app.page == 3,
                 118 | 174 | 184 | 185 | 280 => app.page == 3 && !app.process_picker,
-                175 => false,
+                175 => matches!(app.page, 0 | 3 | 6) && !app.process_picker,
                 202 => {
                     (app.page == 0 && !app.presentation.rows.is_empty())
                         || (app.page > 0 && !matches!(app.page, 3 | 6) && !app.debug_view)
@@ -690,13 +734,18 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 194 => (x + 126, 84, 46, 32),
                 195 => (x + 172, 84, 46, 32),
                 196 => (x + 218, 84, 48, 32),
-                192 => (x + content - 190, 245, 174, 28),
+                192 => (
+                    x + content - 14 - contributor_search_width(content) + 12,
+                    246 + (28 - search_height) / 2,
+                    contributor_search_width(content) - 24,
+                    search_height,
+                ),
                 180 => (x + 218, 90, 116, 160),
                 104 => (x + 336, 84, 64, 32),
                 105 => (x + content - 82, 84, 82, 32),
                 108 => (x + 410, 84, 190, 32),
-                109 => (x + 248, 245, 160, 180),
-                176 => (x + 418, 245, 30, 28),
+                109 => (x + 246, 246, 160, 180),
+                176 => (x + 414, 246, 28, 28),
                 201 => (
                     x + 1,
                     table_y,
@@ -758,7 +807,9 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 187 => (x + 138, 252, 140, 32),
                 188 => (x + 290, 252, 96, 32),
                 175 => {
-                    if app.page == 6 {
+                    if app.page == 0 {
+                        (x + 450, 246, 174, 28)
+                    } else if app.page == 6 {
                         (x + 160, 90, 178, 34)
                     } else {
                         (x + 152, height - 52, 174, 32)
@@ -826,6 +877,14 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
             );
         }
         let _ = MoveWindow(h, scale(a), scale(b), scale(c), scale(d), false);
+        if id == 109 {
+            SendMessageW(
+                h,
+                CB_SETITEMHEIGHT,
+                Some(WPARAM(usize::MAX)),
+                Some(LPARAM(scale(22) as isize)),
+            );
+        }
         if matches!(id, 101 | 108 | 180 | 194..=196) {
             let _ = EnableWindow(h, !app.active);
         }
@@ -891,6 +950,17 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
         }
         if matches!(id, 175 | 184 | 186..=188) {
             let _ = EnableWindow(h, !app.detail_pending);
+        }
+        if id == 175 {
+            let _ = EnableWindow(h, !app.core_pending && !app.detail_pending);
+            set_text(
+                h,
+                if app.core_pending {
+                    "Observing / UAC…"
+                } else {
+                    "Observe cores (5s)"
+                },
+            );
         }
         if id == 120 {
             set_text(
@@ -1079,6 +1149,25 @@ unsafe fn size_report_columns(app: &App) {
     }
 }
 
+fn observed_cores(app: &App, pid: u32, created: Option<u64>) -> String {
+    if app.core_pending {
+        return "Observing…".into();
+    }
+    if app.core_observation.title.is_empty() {
+        return "Run core trace".into();
+    }
+    app.core_observation
+        .rows
+        .iter()
+        .find(|r| {
+            r.len() == 4
+                && r[1].parse::<u32>().ok() == Some(pid)
+                && created.is_some()
+                && r[2].parse::<u64>().ok() == created
+        })
+        .map(|r| r[3].clone())
+        .unwrap_or_else(|| "No observation".into())
+}
 pub unsafe fn update_table(app: &mut App) {
     let Some(s) = app.history.back() else { return };
     let selected = selected_identity(app);
@@ -1124,8 +1213,7 @@ pub unsafe fn update_table(app: &mut App) {
             whole(p.threads),
             whole(p.handles),
             format!("{:.1}", p.score),
-            "Tracing required".into(),
-            "Not exposed".into(),
+            observed_cores(app, p.pid, p.created_ticks),
         ];
         for (column, cell) in cells.iter().enumerate() {
             let mut text = wide(cell);
@@ -1393,6 +1481,8 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
     let old = SelectObject(dc, semibold.into());
     let (state, state_color) = if app.net_pending {
         ("Permission pending", theme::metric_colors()[3])
+    } else if app.core_pending {
+        ("Observing cores", theme::metric_colors()[0])
     } else if app.net_active {
         ("Network live", theme::metric_colors()[1])
     } else if app.active {
@@ -1581,23 +1671,32 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
         );
         SelectObject(dc, font.into());
         if app.page == 0 {
-            series(
-                dc,
-                app,
-                RECT {
-                    left: left + w * 3 / 5,
-                    top: top + 32,
-                    right: left + w - 14,
-                    bottom: top + 66,
-                },
-                accent,
-                |s| match index {
-                    0 => s.cpu,
-                    1 => s.ram,
-                    2 => s.gpu,
-                    _ => s.disk,
-                },
-            );
+            let mini = RECT {
+                left: left + w * 3 / 5,
+                top: top + 24,
+                right: left + w - 14,
+                bottom: top + 78,
+            };
+            label(dc, mini.right - 30, top + 10, "100%");
+            label(dc, mini.right - 18, top + 80, "0%");
+            for y in [mini.top, mini.bottom] {
+                fill(
+                    dc,
+                    &RECT {
+                        left: mini.left,
+                        top: y,
+                        right: mini.right,
+                        bottom: y + 1,
+                    },
+                    palette.border,
+                );
+            }
+            series(dc, app, mini, accent, |s| match index {
+                0 => s.cpu,
+                1 => s.ram,
+                2 => s.gpu,
+                _ => s.disk,
+            });
             let peak = app
                 .history
                 .iter()
@@ -1615,11 +1714,15 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                 &if index == 1
                     && let Some(s) = app.history.back()
                 {
-                    format!(
-                        "{} of {:.0} GiB installed",
-                        fmt(s.ram, "%"),
-                        s.total_ram_mb / 1024.
-                    )
+                    if w < 250 {
+                        format!("C {} · PF {}", fmt(s.commit, "%"), fmt(s.swap, "%"))
+                    } else {
+                        format!(
+                            "Commit {} · Pagefile {}",
+                            fmt(s.commit, "%"),
+                            fmt(s.swap, "%")
+                        )
+                    }
                 } else if let Some(p) = peak {
                     format!("Peak {p:.1}% · capture")
                 } else {
@@ -1737,7 +1840,7 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                     right: chart_right,
                     bottom: bottom - 32,
                 };
-                for (fraction, value) in [(0, "100"), (1, "50"), (2, "0")] {
+                for (fraction, value) in [(0, "100%"), (1, "50%"), (2, "0%")] {
                     let y = graph.top + (graph.bottom - graph.top) * fraction / 2;
                     label(dc, x + 12, y - 7, value);
                     fill(
@@ -1748,7 +1851,11 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                             right: graph.right,
                             bottom: y + 1,
                         },
-                        palette.border,
+                        if fraction == 1 {
+                            palette.border
+                        } else {
+                            palette.muted
+                        },
                     );
                 }
                 let axis_start = latest.map(|s| (s.elapsed - 120.).max(0.)).unwrap_or(0.);
@@ -1807,13 +1914,31 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                     .flatten()
                     .filter(|v| v.is_finite())
                     .fold(0.01_f64, f64::max);
-                label(dc, rx, chart_top + 80, &format!("Scale 0–{maximum:.2}"));
+                label(
+                    dc,
+                    rx,
+                    chart_top + 80,
+                    &format!("Ceiling {maximum:.2} MiB/s"),
+                );
                 let net_graph = RECT {
                     left: rx,
                     top: chart_top + 102,
                     right: x + content - 14,
-                    bottom: bottom - 38,
+                    bottom: bottom - 52,
                 };
+                for y in [net_graph.top, net_graph.bottom] {
+                    fill(
+                        dc,
+                        &RECT {
+                            left: net_graph.left,
+                            top: y,
+                            right: net_graph.right,
+                            bottom: y + 1,
+                        },
+                        palette.muted,
+                    );
+                }
+                label(dc, rx, bottom - 49, "Floor 0 MiB/s");
                 series(dc, app, net_graph, accents[1], |s| {
                     s.network_in_mb.map(|v| v / maximum * 100.)
                 });
@@ -1851,7 +1976,7 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                     );
                 }
                 SelectObject(dc, semibold.into());
-                text(dc, x + 14, 251, "Top contributors", palette.text);
+                text(dc, x + 14, 254, "Top contributors", palette.text);
                 SelectObject(dc, font.into());
                 panel(
                     dc,
@@ -1865,21 +1990,21 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                     palette.border,
                 );
                 SelectObject(dc, semibold.into());
-                text(dc, x + 14, 251, "Top contributors", palette.text);
+                text(dc, x + 14, 254, "Top contributors", palette.text);
                 SelectObject(dc, font.into());
                 label(
                     dc,
-                    x + 162,
-                    252,
+                    x + 156,
+                    254,
                     &format!("{} processes", app.displayed_rows.len()),
                 );
                 panel(
                     dc,
                     RECT {
-                        left: x + content - 192,
-                        top: 243,
+                        left: x + content - 14 - contributor_search_width(content),
+                        top: 246,
                         right: x + content - 14,
-                        bottom: 275,
+                        bottom: 274,
                     },
                     palette.bg,
                     palette.border,
@@ -2135,6 +2260,26 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
     let _ = EndPaint(hwnd, &ps);
 }
 
+pub unsafe fn focus_search_frame(app: &App, hwnd: HWND, lparam: LPARAM) -> bool {
+    if app.page != 0 || app.compact {
+        return false;
+    }
+    let Ok(search) = GetDlgItem(Some(hwnd), 192) else {
+        return false;
+    };
+    let mut rect = RECT::default();
+    let _ = GetClientRect(hwnd, &mut rect);
+    let (_, x, content) = geometry((rect.right as f64 / app.scale) as i32);
+    let px = (lparam.0 as u16 as i16 as f64 / app.scale) as i32;
+    let py = ((lparam.0 >> 16) as u16 as i16 as f64 / app.scale) as i32 - 28;
+    if (x + content - 14 - contributor_search_width(content)..x + content - 14).contains(&px)
+        && (246..274).contains(&py)
+    {
+        let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(search));
+        return true;
+    }
+    false
+}
 pub unsafe fn cpu_hit(app: &App, hwnd: HWND, lparam: LPARAM) -> bool {
     if app.page != 0 || app.compact {
         return false;

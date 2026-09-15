@@ -1,5 +1,27 @@
 # Validation evidence
 
+## Scheduler observation — 2026-09-16
+
+- UX agent accepted the native idle contributor toolbar after two reviews: 28px
+  aligned controls, centered search hint, corrected rank height and button corner
+  backing. KPI plot span increased from 24 to 54 pixels after user feedback.
+- Live full-width cards were inspected with measured values. Computer Use was
+  stopped by the user before narrow-window and typed-search visual verification;
+  these remain unverified. Unchanged control labels no longer trigger text resets.
+
+- An optimized UAC helper completed a five-second workstation trace with
+  1,806,905 decoded context switches, 1,728 unmapped events, 305 mapped processes,
+  and zero reported lost ETW events/buffers. Raw diagnostic captures remain local.
+- Added a scheduler decoding regression test for incoming-thread attribution,
+  newer event versions, timestamp protection, thread retirement, and CPU indexes
+  above 255. The release pipeline also runs a privileged scheduler smoke test.
+- Initial validation exposed insufficient buffers and newer event versions;
+  corrected the bounded buffer allocation and version-compatible leading-field
+  decoding before accepting results. Watchdog cleanup has its own deadline.
+- Physical-core topology and time spent per process per core are not inferred.
+  Actual per-process swapped-out bytes remain unsupported; system pagefile usage
+  and private commit are explicitly distinguished.
+
 ## 0.3.0 candidate — 2026-09-15
 
 - Formatting and clippy all targets with warnings denied pass; 18 Rust tests pass. Added checks cover shape-preserving graph interpolation, executable metadata, native Segoe UI selection, bounded live history, IPv6 filters and commit-aware ranking.

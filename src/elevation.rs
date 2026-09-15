@@ -66,6 +66,18 @@ pub fn record(
     stop: &mpsc::Receiver<()>,
     notify: impl Fn(bool, Report),
 ) -> Result<(), String> {
+    record_mode(seconds, stop, notify, false)
+}
+pub fn record_cores(notify: impl Fn(bool, Report)) -> Result<(), String> {
+    let (_tx, rx) = mpsc::channel();
+    record_mode(5, &rx, notify, true)
+}
+fn record_mode(
+    seconds: u64,
+    stop: &mpsc::Receiver<()>,
+    notify: impl Fn(bool, Report),
+    cores: bool,
+) -> Result<(), String> {
     let id = format!(
         "{:?}",
         unsafe { CoCreateGuid() }.map_err(|e| e.to_string())?
@@ -116,7 +128,12 @@ pub fn record(
             .to_string(),
     );
     let args = wide(&format!(
-        "--network-elevated {} {id} {}",
+        "{} {} {id} {}",
+        if cores {
+            "--cores-elevated"
+        } else {
+            "--network-elevated"
+        },
         std::process::id(),
         seconds.clamp(1, 900)
     ));
@@ -131,8 +148,8 @@ pub fn record(
     };
     if let Err(e) = unsafe { ShellExecuteExW(&mut info) } {
         if unsafe { GetLastError() } == ERROR_CANCELLED {
-            let mut r = Report::new("Network recording cancelled", &["Status", "Capture"]);
-            r.row(&["UAC declined", "No network recording started"]);
+            let mut r = Report::new("Recording cancelled", &["Status", "Capture"]);
+            r.row(&["UAC declined", "No privileged recording started"]);
             notify(false, r);
             return Ok(());
         }
@@ -170,21 +187,28 @@ pub fn record(
     let mut live = std::collections::VecDeque::new();
     let reader_thread = thread::spawn(move || {
         let mut reader = BufReader::new(reader);
+        let limit = if cores { 4 * 1024 * 1024 } else { 65536 };
         loop {
             let mut line = Vec::new();
             // Bound every IPC frame, including errors, before JSON allocation.
-            let read = std::io::Read::take(&mut reader, 65537).read_until(b'\n', &mut line);
+            let read = std::io::Read::take(&mut reader, limit + 1).read_until(b'\n', &mut line);
             match read {
                 Ok(0) | Err(_) => break,
                 Ok(_) => {
-                    if line.len() > 65536 || frames_tx.send(line).is_err() {
+                    if line.len() as u64 > limit || frames_tx.send(line).is_err() {
                         break;
                     }
                 }
             }
         }
     });
-    let path = traffic::dir().join(format!("traffic-{}-{id}.jsonl", crate::metrics::now()));
+    let folder = if cores {
+        crate::actions::data_dir().join("core-observations")
+    } else {
+        traffic::dir()
+    };
+    std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let path = folder.join(format!("trace-{}-{id}.jsonl", crate::metrics::now()));
     let mut saved = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -242,8 +266,14 @@ pub fn record(
                             .ok_or("Missing recording state")?;
                         let mut report: Report = serde_json::from_value(notice["report"].clone())
                             .map_err(|e| e.to_string())?;
-                        traffic::populate_live(&mut report, &live);
+                        if !cores {
+                            traffic::populate_live(&mut report, &live);
+                        }
                         if !active {
+                            if cores {
+                                serde_json::to_writer(&mut saved, &report)
+                                    .map_err(|e| e.to_string())?;
+                            }
                             report
                                 .debug
                                 .push_str(&format!("\nSaved locally: {}", path.display()));
@@ -274,7 +304,7 @@ pub fn record(
     }
     drop(frames);
     let _ = reader_thread.join();
-    if result.is_err() || !metadata {
+    if !cores && (result.is_err() || !metadata) {
         let coverage = serde_json::json!({"schema":1,"complete":false,"events_lost":0,"buffers_lost":0,"dropped":0,"unsupported":0,"failure":result.as_ref().err().cloned().unwrap_or("Recorder did not provide coverage".into())});
         let _ = std::fs::write(
             path.with_extension("meta.json"),
@@ -285,6 +315,12 @@ pub fn record(
 }
 
 pub fn helper(parent: u32, id: &str, seconds: u64) -> Result<(), String> {
+    helper_mode(parent, id, seconds, false)
+}
+pub fn helper_cores(parent: u32, id: &str) -> Result<(), String> {
+    helper_mode(parent, id, 5, true)
+}
+fn helper_mode(parent: u32, id: &str, seconds: u64, cores: bool) -> Result<(), String> {
     let name = pipe_name(id)?;
     let h = unsafe {
         CreateFileW(
@@ -305,6 +341,14 @@ pub fn helper(parent: u32, id: &str, seconds: u64) -> Result<(), String> {
         return Err("Accounting pipe server identity mismatch".into());
     }
     let output = Arc::new(Mutex::new(reader.try_clone().map_err(|e| e.to_string())?));
+    if cores {
+        let report = crate::core_trace::collect().unwrap_or_else(Report::error);
+        return send(
+            &output,
+            &serde_json::json!({"notice":{"active":false,"report":report}}),
+        )
+        .map_err(|e| e.to_string());
+    }
     let (stop_tx, stop_rx) = mpsc::channel();
     let ended = stop_tx.clone();
     let messages = output.clone();

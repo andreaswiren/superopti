@@ -141,6 +141,28 @@ pub fn worker(
                 1
             };
             let report = match command {
+                Command::ObserveCores => {
+                    match crate::core_trace::collect() {
+                        Ok(report) => emit(hwnd, &action_events, Event::CoreObservation(report)),
+                        Err(e) if e.starts_with("Administrator permission required") => {
+                            if let Err(e) = crate::elevation::record_cores(|_, report| {
+                                emit(hwnd, &action_events, Event::CoreObservation(report))
+                            }) {
+                                emit(
+                                    hwnd,
+                                    &action_events,
+                                    Event::CoreObservation(crate::model::Report::error(e)),
+                                );
+                            }
+                        }
+                        Err(e) => emit(
+                            hwnd,
+                            &action_events,
+                            Event::CoreObservation(crate::model::Report::error(e)),
+                        ),
+                    }
+                    continue;
+                }
                 Command::PickProcesses => {
                     match crate::native::NativeMonitor::new().and_then(|mut m| m.sample(0.)) {
                         Ok(s) => emit(hwnd, &action_events, Event::ProcessChoices(s.processes)),

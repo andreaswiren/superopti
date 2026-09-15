@@ -4,6 +4,17 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
 
 ## [0.3.0] - 2026-09-15
 
+- Add explicit five-second ETW process-to-logical-CPU observations with a limited
+  UAC helper, identity checks, lost-event rejection, and deadline watchdog.
+- Display observed indexes in contributors and process details and include their
+  observation timestamp/report in capture exports.
+- Show system commit/pagefile percentages in the Memory card; remove the
+  unsupported per-process swap placeholder and explain the limitation in details.
+- Align contributor toolbar controls to a shared 28-pixel height, center search
+  placeholder/input text using font metrics, and keep minimum-width spacing.
+- Add explicit floor/ceiling labels and guides to overview resource sparklines
+  and network bandwidth, plus clearer percentage bounds on resource history.
+
 - Add UTC graph labels and capture start/end times, resource-card sparklines,
   and separate receive/send interface-bandwidth curves.
 - Add an on-demand process picker table with PID, memory, threads and handles.

@@ -236,9 +236,9 @@ unsafe extern "system" fn event(record: *mut EVENT_RECORD) {
         p.unsupported += 1;
     }
 }
-struct Properties(Vec<u64>);
+pub(crate) struct Properties(Vec<u64>);
 impl Properties {
-    fn new(name: &[u16], guid: GUID) -> Self {
+    pub(crate) fn new(name: &[u16], guid: GUID) -> Self {
         let bytes = size_of::<EVENT_TRACE_PROPERTIES>() + name.len() * 2;
         let mut p = Self(vec![0; bytes.div_ceil(8)]);
         unsafe {
@@ -266,7 +266,7 @@ impl Properties {
         }
         p
     }
-    fn ptr(&mut self) -> *mut EVENT_TRACE_PROPERTIES {
+    pub(crate) fn ptr(&mut self) -> *mut EVENT_TRACE_PROPERTIES {
         self.0.as_mut_ptr().cast()
     }
 }

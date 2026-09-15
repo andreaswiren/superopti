@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(unsafe_op_in_unsafe_fn)]
 mod actions;
+mod core_trace;
 mod devices;
 mod elevation;
 mod engine;
@@ -40,6 +41,7 @@ enum Command {
     Stop,
     Checks,
     PickProcesses,
+    ObserveCores,
     Fix(u32),
     Undo,
     Threads(u32, Option<u64>),
@@ -83,6 +85,7 @@ enum Event {
     TrafficHistory(u64, model::Report),
     ActionStatus(String),
     ProcessChoices(Vec<metrics::Process>),
+    CoreObservation(model::Report),
 }
 struct App {
     tx: Sender<Command>,
@@ -128,6 +131,8 @@ struct App {
     action_status: String,
     exclude_health_checks: bool,
     core_scroll: usize,
+    core_pending: bool,
+    core_observation: model::Report,
     reports: [model::Report; 7],
     scale: f64,
     heading: HFONT,
@@ -147,6 +152,11 @@ fn request_metadata(app: &mut App, key: (u32, Option<u64>)) {
 }
 unsafe fn set_text(hwnd: HWND, s: &str) {
     let t = wide(s);
+    let mut current = vec![0u16; t.len() + 1];
+    let len = GetWindowTextW(hwnd, &mut current).max(0) as usize;
+    if current[..len] == t[..t.len().saturating_sub(1)] {
+        return;
+    }
     let _ = SetWindowTextW(hwnd, PCWSTR(t.as_ptr()));
 }
 unsafe fn message(hwnd: HWND, text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
@@ -232,6 +242,16 @@ unsafe fn tray(hwnd: HWND, action: NOTIFY_ICON_MESSAGE, active: bool) {
     }
 }
 unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
+    if id == 175 {
+        if !app.core_pending {
+            app.core_pending = true;
+            app.action_status =
+                "Observing CPU placement for 5 seconds; approve UAC if requested".into();
+            let _ = app.tx.send(Command::ObserveCores);
+            ui::layout(app, hwnd);
+        }
+        return;
+    }
     if id == 281 || (id == 308 && app.detail_pid.is_none()) {
         app.process_picker = true;
         app.detail_pending = false;
@@ -847,7 +867,7 @@ fn export(app: &mut App, hwnd: HWND) {
             .create_new(true)
             .open(&path)
             .map_err(|e| e.to_string())?;
-        let data = serde_json::json!({"schema_version":1,"app_version":env!("CARGO_PKG_VERSION"),"notes":"Rankings are heuristic, not proof of causation. Process I/O includes non-disk I/O. Missing counters are null. GPU is busiest physical engine; per-process GPU sums engines capped at 100. RAM is working set. Disk busy is aggregate. Timestamps are UTC Unix seconds.","samples":app.history});
+        let data = serde_json::json!({"schema_version":1,"app_version":env!("CARGO_PKG_VERSION"),"notes":"Rankings are heuristic, not proof of causation. Process I/O includes non-disk I/O. Missing counters are null. GPU is busiest physical engine; per-process GPU sums engines capped at 100. RAM is working set. Disk busy is aggregate. Timestamps are UTC Unix seconds.","samples":app.history,"core_observation":app.core_observation});
         serde_json::to_writer(file, &data).map_err(|e| e.to_string())?;
         Ok(format!(
             "Exported {} samples to {}\r\nExports contain process names and PIDs. Nothing is uploaded.",
@@ -911,7 +931,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     if ptr.is_null() {
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
-    if let Some(result) = theme::control_color(msg, wparam) {
+    if let Some(result) = theme::control_color(msg, wparam, lparam) {
         return result;
     }
     if msg == WM_DRAWITEM && lparam.0 != 0 {
@@ -935,6 +955,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         return LRESULT(0);
     }
     let result = match msg {
+        WM_LBUTTONDOWN if ui::focus_search_frame(app, hwnd, lparam) => LRESULT(0),
         WM_CREATE => {
             app.scale = windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) as f64 / 96.0;
             init(app, hwnd);
@@ -1063,6 +1084,25 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         EVENT => {
             while let Ok(event) = app.rx.try_recv() {
                 match event {
+                    Event::CoreObservation(report) => {
+                        app.core_pending = false;
+                        app.action_status = report
+                            .rows
+                            .first()
+                            .filter(|r| report.title == "Request failed" && r.len() >= 3)
+                            .map(|r| r[2].clone())
+                            .unwrap_or_else(|| report.title.clone());
+                        app.core_observation = report;
+                        if app.core_observation.columns.first().map(String::as_str)
+                            != Some("Process")
+                        {
+                            message(hwnd, &app.action_status, MB_OK | MB_ICONINFORMATION);
+                        }
+                        ui::update_table(app);
+                        if app.page == 3 {
+                            ui::update_report(app);
+                        }
+                    }
                     Event::ProcessChoices(mut choices) => {
                         choices.sort_by_key(|p| (p.name.to_lowercase(), p.pid));
                         if app.process_picker {
@@ -1439,6 +1479,58 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--cores-uac-smoke") {
+        let result = std::cell::RefCell::new(None);
+        let launched = elevation::record_cores(|_, report| {
+            *result.borrow_mut() = Some(report);
+        });
+        let report = result.into_inner();
+        if launched.is_err()
+            || report.as_ref().is_none_or(|r| {
+                !r.metrics.iter().any(|m| {
+                    m.label == "Context switches" && m.value.parse::<u64>().unwrap_or(0) > 0
+                })
+            })
+        {
+            eprintln!(
+                "Core trace failed: {:?}; {}",
+                launched.err(),
+                report
+                    .map(|r| serde_json::to_string(&r).unwrap())
+                    .unwrap_or_default()
+            );
+            std::process::exit(1);
+        }
+        println!("{}", serde_json::to_string(&report.unwrap()).unwrap());
+        return;
+    }
+    if args.get(1).map(String::as_str) == Some("--cores-elevated") {
+        if let (Some(pid), Some(id)) = (args.get(2).and_then(|s| s.parse().ok()), args.get(3)) {
+            let _ = elevation::helper_cores(pid, id);
+        }
+        return;
+    }
+    if args.get(1).map(String::as_str) == Some("--cores-smoke-test") {
+        match core_trace::collect() {
+            Ok(r)
+                if r.metrics.iter().any(|m| {
+                    m.label == "Context switches" && m.value.parse::<u64>().unwrap_or(0) > 0
+                }) =>
+            {
+                println!("{}", serde_json::to_string(&r).unwrap());
+            }
+            result => {
+                eprintln!(
+                    "Scheduler smoke failed: {}",
+                    result
+                        .err()
+                        .unwrap_or("No context switches received".into())
+                );
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if args.get(1).map(String::as_str) == Some("--network-elevated") {
         if let (Some(pid), Some(id), Some(seconds)) = (
             args.get(2).and_then(|s| s.parse().ok()),
@@ -1615,6 +1707,8 @@ fn main() {
             action_status: String::new(),
             exclude_health_checks: false,
             core_scroll: 0,
+            core_pending: false,
+            core_observation: model::Report::default(),
             reports: std::array::from_fn(|_| model::Report::default()),
             scale,
             heading: make_font(-20, 600, theme::font_face()),

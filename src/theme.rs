@@ -272,7 +272,7 @@ unsafe extern "system" fn table_subclass(
     }
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }
-pub unsafe fn control_color(msg: u32, wparam: WPARAM) -> Option<LRESULT> {
+pub unsafe fn control_color(msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if !matches!(
         msg,
         WM_CTLCOLORSTATIC | WM_CTLCOLOREDIT | WM_CTLCOLORLISTBOX | WM_CTLCOLORBTN
@@ -281,7 +281,9 @@ pub unsafe fn control_color(msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     }
     let p = palette();
     let dc = HDC(wparam.0 as *mut _);
-    let bg = if msg == WM_CTLCOLORBTN {
+    let bg = if msg == WM_CTLCOLORBTN
+        || (msg == WM_CTLCOLOREDIT && GetDlgCtrlID(HWND(lparam.0 as *mut _)) == 192)
+    {
         p.bg
     } else {
         p.surface
@@ -363,7 +365,9 @@ pub unsafe fn draw_button(item: &DRAWITEMSTRUCT) {
         } else {
             color(248, 250, 254)
         }
-    } else if matches!(item.CtlID,111..=114|121|122|130|176|194..=196) {
+    } else if matches!(item.CtlID,111..=114|121|122|130|176|194..=196)
+        || (item.CtlID == 175 && PAGE.get() == 0)
+    {
         p.surface
     } else {
         p.bg
