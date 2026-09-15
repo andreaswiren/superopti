@@ -19,8 +19,6 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
   and separate receive/send interface-bandwidth curves.
 - Add an on-demand process picker table with PID, memory, threads and handles.
 - Export reports completion through a notification bubble without overlaying charts.
-- Make unsupported process core tracing and swap counters explicit; hide the
-  unimplemented core-observation action.
 
 - Repair opacity popup sizing and combo notification handling; choosing transparency enables always-on-top without requiring a separate Pin click.
 

@@ -10,7 +10,7 @@ The maintainer triages severity/affected versions, reproduces safely, coordinate
 
 ## Operation and updates
 
-Run as a standard user normally. No service, driver, listening endpoint, telemetry or automatic updater is implemented. Explicit TCP accounting and pagefile changes may need administrator rights; the app never elevates itself. A per-user installation is user-writable and is not a privileged trust boundary. Do not elevate an untrusted executable or installer.
+Run as a standard user normally. No service, driver, listening endpoint, telemetry or automatic updater is implemented. Explicit network accounting, scheduler observations and pagefile changes may need administrator rights. ETW observations request UAC for a limited helper; the main UI remains unelevated. Helpers exchange bounded messages over a local ACL-restricted pipe and accept no arbitrary output paths. A per-user installation is user-writable and is not a privileged trust boundary. Do not elevate an untrusted executable or installer.
 
 Release checksums detect changes when compared with trusted metadata; they are not publisher signatures. Binaries are unsigned. Verify repository origin, choose the latest corrected release, exit the running app and replace/reinstall. No background update traffic occurs.
 
