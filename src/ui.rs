@@ -244,6 +244,7 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
         (113, "Install for this user", (24, 362, 182, 36)),
         (114, "Open captures folder", (218, 362, 182, 36)),
         (304, "Back to overview", (24, 174, 160, 32)),
+        (281, "Choose process", (24, 174, 148, 34)),
         (117, "Threads", (198, 174, 238, 32)),
         (118, "Record traffic (2 min)", (448, 174, 208, 32)),
         (119, "Connections", (448, 174, 132, 32)),
@@ -555,6 +556,7 @@ fn report_top(app: &App, _height: i32) -> i32 {
         0 => overview_table_bottom(_height) + 16,
         1 => 386,
         2 => 366,
+        3 if app.process_picker => 190,
         3 => 338,
         4 => 292,
         5 if !app.traffic_error.is_empty() => 498,
@@ -633,8 +635,9 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 111..=114 => app.page == 2,
                 203 => app.page == 3 && !app.debug_view,
                 304 => matches!(app.page, 3 | 6),
-                118 | 174 | 184 | 185 | 280 => app.page == 3,
-                175 => matches!(app.page, 3 | 6),
+                281 => app.page == 3,
+                118 | 174 | 184 | 185 | 280 => app.page == 3 && !app.process_picker,
+                175 => false,
                 202 => {
                     (app.page == 0 && !app.presentation.rows.is_empty())
                         || (app.page > 0 && !matches!(app.page, 3 | 6) && !app.debug_view)
@@ -740,6 +743,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
                 114 => (x + content / 2 + 24, 260, 174, 34),
                 280 => (x, 142, content, 36),
                 304 => (x, 90, 148, 34),
+                281 => (x + 356, 90, 148, 34),
                 117 => (x + 160, 90, 96, 34),
                 119 => (x + 268, 90, 124, 34),
                 118 => (x + 160, 90, 184, 34),
@@ -1120,8 +1124,8 @@ pub unsafe fn update_table(app: &mut App) {
             whole(p.threads),
             whole(p.handles),
             format!("{:.1}", p.score),
-            "Not captured".into(),
-            "Unavailable".into(),
+            "Tracing required".into(),
+            "Not exposed".into(),
         ];
         for (column, cell) in cells.iter().enumerate() {
             let mut text = wide(cell);
@@ -1198,6 +1202,7 @@ pub unsafe fn selected_pid(app: &App) -> Option<u32> {
 }
 
 pub unsafe fn details(app: &mut App, hwnd: HWND) {
+    app.process_picker = false;
     if app.detail_pending {
         return;
     }
@@ -1486,6 +1491,7 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
             },
         );
         if app.page == 3
+            && !app.process_picker
             && let Some(pid) = app.detail_pid
             && let Some(name) = cached_process_name(pid, app.detail_created)
         {
@@ -1575,6 +1581,23 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
         );
         SelectObject(dc, font.into());
         if app.page == 0 {
+            series(
+                dc,
+                app,
+                RECT {
+                    left: left + w * 3 / 5,
+                    top: top + 32,
+                    right: left + w - 14,
+                    bottom: top + 66,
+                },
+                accent,
+                |s| match index {
+                    0 => s.cpu,
+                    1 => s.ram,
+                    2 => s.gpu,
+                    _ => s.disk,
+                },
+            );
             let peak = app
                 .history
                 .iter()
@@ -1681,7 +1704,7 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                 SelectObject(dc, semibold.into());
                 text(dc, x + 16, chart_top + 12, "Resource history", palette.text);
                 SelectObject(dc, font.into());
-                label(dc, x + 180, chart_top + 15, "Last 120 seconds · %");
+                label(dc, x + 180, chart_top + 15, "120-second window · % · UTC");
                 let chart_right = x + content - 210;
                 panel(
                     dc,
@@ -1731,11 +1754,21 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                 let axis_start = latest.map(|s| (s.elapsed - 120.).max(0.)).unwrap_or(0.);
                 for tick in 0..=4 {
                     let px = graph.left + (graph.right - graph.left) * tick / 4;
-                    let mut value = wide(&format!("{:.0}s", axis_start + tick as f64 * 30.));
+                    let mut value = wide(
+                        &latest
+                            .map(|s| {
+                                clock_label(
+                                    s.unix_seconds
+                                        .saturating_sub((s.elapsed - axis_start).max(0.) as u64)
+                                        + tick as u64 * 30,
+                                )
+                            })
+                            .unwrap_or_else(|| format!("{}s", tick * 30)),
+                    );
                     let mut rect = RECT {
-                        left: px - 20,
+                        left: px - 30,
                         top: bottom - 23,
-                        right: px + 28,
+                        right: px + 30,
                         bottom: bottom - 6,
                     };
                     SetTextColor(dc, palette.muted);
@@ -1751,57 +1784,62 @@ pub unsafe fn paint(app: &App, hwnd: HWND) {
                     });
                 }
                 let rx = x + content - 164;
-                label(dc, rx, chart_top + 14, "Capture insight");
-                SelectObject(dc, semibold.into());
+                text(dc, rx, chart_top + 14, "Network · MiB/s", palette.text);
                 text(
                     dc,
                     rx,
-                    chart_top + 39,
-                    if latest.is_some() {
-                        "Resource peaks"
-                    } else {
-                        "Awaiting capture"
-                    },
-                    palette.text,
+                    chart_top + 38,
+                    &format!("In  {}", fmt(latest.and_then(|s| s.network_in_mb), "")),
+                    accents[1],
                 );
-                SelectObject(dc, font.into());
-                for (i, name) in ["CPU", "Memory", "Disk busy"].iter().enumerate() {
-                    let peak = app
-                        .history
-                        .iter()
-                        .filter_map(|s| match i {
-                            0 => s.cpu,
-                            1 => s.ram,
-                            _ => s.disk,
-                        })
-                        .reduce(f64::max);
-                    let y = chart_top + 72 + i as i32 * 27;
-                    if y + 20 < bottom {
-                        label(dc, rx, y, name);
-                        fill(
-                            dc,
-                            &RECT {
-                                left: rx + 72,
-                                top: y + 7,
-                                right: rx + 117,
-                                bottom: y + 11,
-                            },
-                            palette.border,
-                        );
-                        if let Some(v) = peak {
-                            fill(
-                                dc,
-                                &RECT {
-                                    left: rx + 72,
-                                    top: y + 7,
-                                    right: rx + 72 + (v.clamp(0., 100.) * 0.45) as i32,
-                                    bottom: y + 11,
-                                },
-                                accents[if i == 2 { 3 } else { i }],
-                            );
-                        }
-                        text(dc, rx + 122, y, &fmt(peak, "%"), palette.muted);
-                    }
+                text(
+                    dc,
+                    rx,
+                    chart_top + 57,
+                    &format!("Out {}", fmt(latest.and_then(|s| s.network_out_mb), "")),
+                    accents[0],
+                );
+                let maximum = app
+                    .history
+                    .iter()
+                    .filter(|s| s.elapsed >= axis_start)
+                    .flat_map(|s| [s.network_in_mb, s.network_out_mb])
+                    .flatten()
+                    .filter(|v| v.is_finite())
+                    .fold(0.01_f64, f64::max);
+                label(dc, rx, chart_top + 80, &format!("Scale 0–{maximum:.2}"));
+                let net_graph = RECT {
+                    left: rx,
+                    top: chart_top + 102,
+                    right: x + content - 14,
+                    bottom: bottom - 38,
+                };
+                series(dc, app, net_graph, accents[1], |s| {
+                    s.network_in_mb.map(|v| v / maximum * 100.)
+                });
+                series(dc, app, net_graph, accents[0], |s| {
+                    s.network_out_mb.map(|v| v / maximum * 100.)
+                });
+                if let (Some(first), Some(last)) = (app.history.front(), latest) {
+                    label(
+                        dc,
+                        rx,
+                        bottom - 30,
+                        &format!(
+                            "Start {}",
+                            clock_label(first.unix_seconds.saturating_sub(first.elapsed as u64))
+                        ),
+                    );
+                    label(
+                        dc,
+                        rx,
+                        bottom - 16,
+                        &format!(
+                            "{} {} UTC",
+                            if app.active { "Now" } else { "End" },
+                            clock_label(last.unix_seconds)
+                        ),
+                    );
                 }
                 if latest.is_none() {
                     text(
@@ -2107,6 +2145,11 @@ pub unsafe fn cpu_hit(app: &App, hwnd: HWND, lparam: LPARAM) -> bool {
     let x = (lparam.0 as i16 as f64 / app.scale) as i32;
     let y = ((lparam.0 >> 16) as i16 as f64 / app.scale) as i32 - 28;
     x >= left && x < left + (content - 36) / 4 && (124..220).contains(&y)
+}
+
+fn clock_label(seconds: u64) -> String {
+    let utc = traffic::utc(seconds);
+    utc.get(11..19).unwrap_or("Unknown").to_string()
 }
 
 fn chart_runs(

@@ -39,6 +39,7 @@ enum Command {
     Start(u64, u64),
     Stop,
     Checks,
+    PickProcesses,
     Fix(u32),
     Undo,
     Threads(u32, Option<u64>),
@@ -81,6 +82,7 @@ enum Event {
     TrafficUpdate(model::Report),
     TrafficHistory(u64, model::Report),
     ActionStatus(String),
+    ProcessChoices(Vec<metrics::Process>),
 }
 struct App {
     tx: Sender<Command>,
@@ -97,6 +99,8 @@ struct App {
     detail_created: Option<u64>,
     detail_pending: bool,
     process_tab: usize,
+    process_picker: bool,
+    process_choices: Vec<metrics::Process>,
     displayed_rows: Vec<(u32, Option<u64>)>,
     metadata_cache: HashMap<(u32, Option<u64>), inspect::ProcessMetadata>,
     metadata_pending: HashSet<(u32, Option<u64>)>,
@@ -228,6 +232,20 @@ unsafe fn tray(hwnd: HWND, action: NOTIFY_ICON_MESSAGE, active: bool) {
     }
 }
 unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
+    if id == 281 || (id == 308 && app.detail_pid.is_none()) {
+        app.process_picker = true;
+        app.detail_pending = false;
+        app.page = 3;
+        app.presentation = model::Report::new(
+            "Choose a process",
+            &["Process", "PID", "RAM MiB", "Threads", "Handles"],
+        );
+        app.process_choices.clear();
+        ui::update_report(app);
+        ui::layout(app, hwnd);
+        let _ = app.tx.send(Command::PickProcesses);
+        return;
+    }
     if matches!(id, 197..=199) {
         match id {
             197 => {
@@ -608,7 +626,7 @@ unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
         }
         104 => Some(Command::Stop),
         105 => {
-            export(app);
+            export(app, hwnd);
             app.page = 0;
             ui::layout(app, hwnd);
             None
@@ -812,7 +830,7 @@ fn export_report(app: &mut App) {
         Err(e) => format!("Export failed: {e}"),
     };
 }
-fn export(app: &mut App) {
+fn export(app: &mut App, hwnd: HWND) {
     let result = (|| -> Result<String, String> {
         if app.history.is_empty() {
             return Err("No samples to export. Start a capture first.".into());
@@ -838,9 +856,28 @@ fn export(app: &mut App) {
         ))
     })();
     unsafe {
-        app.presentation = model::Report::outcome("Export", result.unwrap_or_else(|e| e));
-        app.reports[0] = app.presentation.clone();
-        ui::update_report(app);
+        let success = result.is_ok();
+        let body = result.unwrap_or_else(|e| e);
+        let mut icon = NOTIFYICONDATAW {
+            cbSize: size_of::<NOTIFYICONDATAW>() as u32,
+            hWnd: hwnd,
+            uID: 1,
+            uFlags: NIF_INFO,
+            dwInfoFlags: if success { NIIF_INFO } else { NIIF_ERROR },
+            ..Default::default()
+        };
+        for (target, value) in icon.szInfo.iter_mut().take(255).zip(body.encode_utf16()) {
+            *target = value;
+        }
+        let title = wide(if success {
+            "Capture exported"
+        } else {
+            "Export failed"
+        });
+        icon.szInfoTitle[..title.len()].copy_from_slice(&title);
+        if !Shell_NotifyIconW(NIM_MODIFY, &icon).as_bool() {
+            message(hwnd, &body, MB_OK);
+        }
     }
 }
 fn color(r: u32, g: u32, b: u32) -> COLORREF {
@@ -910,6 +947,32 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 return result;
             }
             let notification = &*(lparam.0 as *const NMHDR);
+            if app.process_picker
+                && notification.hwndFrom == app.detail
+                && (notification.code == NM_DBLCLK
+                    || (notification.code == LVN_KEYDOWN
+                        && (*(lparam.0 as *const NMLVKEYDOWN)).wVKey == 13))
+            {
+                let row = SendMessageW(
+                    app.detail,
+                    LVM_GETNEXTITEM,
+                    Some(WPARAM(usize::MAX)),
+                    Some(LPARAM(LVNI_SELECTED as isize)),
+                )
+                .0;
+                if let Some(p) = app.process_choices.get(row as usize) {
+                    let (pid, created) = (p.pid, p.created_ticks);
+                    app.process_picker = false;
+                    app.detail_pid = Some(pid);
+                    app.detail_created = created;
+                    app.process_tab = 0;
+                    app.detail_pending = true;
+                    let _ = app.tx.send(Command::Details(pid, created));
+                    ui::update_report(app);
+                    ui::layout(app, hwnd);
+                }
+                return LRESULT(0);
+            }
             if notification.idFrom == 280 {
                 if notification.code == TCN_SELCHANGING {
                     return LRESULT(app.detail_pending as isize);
@@ -1000,6 +1063,30 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         EVENT => {
             while let Ok(event) = app.rx.try_recv() {
                 match event {
+                    Event::ProcessChoices(mut choices) => {
+                        choices.sort_by_key(|p| (p.name.to_lowercase(), p.pid));
+                        if app.process_picker {
+                            let mut report = model::Report::new(
+                                "Choose a process · double-click or press Enter",
+                                &["Process", "PID", "RAM MiB", "Threads", "Handles"],
+                            );
+                            for p in &choices {
+                                report.row(&[
+                                    &p.name,
+                                    &p.pid.to_string(),
+                                    &fmt(p.ram_mb, ""),
+                                    &fmt(p.threads, ""),
+                                    &fmt(p.handles, ""),
+                                ]);
+                            }
+                            app.process_choices = choices;
+                            app.reports[3] = report.clone();
+                            if app.page == 3 {
+                                app.presentation = report;
+                                ui::update_report(app);
+                            }
+                        }
+                    }
                     Event::Started(s) => {
                         app.capture_end = None;
                         app.reports[0] = model::Report::default();
@@ -1128,7 +1215,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         }
                     }
                     Event::ProcessReport(pid, s) => {
-                        if app.detail_pid == Some(pid) {
+                        if !app.process_picker && app.detail_pid == Some(pid) {
                             app.detail_pending = false;
                             app.reports[3] = s;
                             if app.page == 3 {
@@ -1499,6 +1586,8 @@ fn main() {
             detail_created: None,
             detail_pending: false,
             process_tab: 0,
+            process_picker: false,
+            process_choices: Vec::new(),
             displayed_rows: Vec::new(),
             metadata_cache: HashMap::new(),
             metadata_pending: HashSet::new(),

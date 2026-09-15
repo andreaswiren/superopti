@@ -187,6 +187,10 @@ pub struct Sample {
     pub cpu_queue: Option<f64>,
     pub dpc: Option<f64>,
     pub network_mb: Option<f64>,
+    #[serde(default)]
+    pub network_in_mb: Option<f64>,
+    #[serde(default)]
+    pub network_out_mb: Option<f64>,
     pub context_switches: Option<f64>,
     pub total_ram_mb: f64,
     pub processes: Vec<Process>,
@@ -216,6 +220,8 @@ impl Monitor {
             ("dpc", r"\Processor(_Total)\% DPC Time"),
             ("switch", r"\System\Context Switches/sec"),
             ("net", r"\Network Interface(*)\Bytes Total/sec"),
+            ("net_in", r"\Network Interface(*)\Bytes Received/sec"),
+            ("net_out", r"\Network Interface(*)\Bytes Sent/sec"),
             ("gpu", r"\GPU Engine(*)\Utilization Percentage"),
             ("cores", r"\Processor Information(*)\% Processor Time"),
         ] {
@@ -223,7 +229,7 @@ impl Monitor {
                 "disk_idle" | "disk_mb" | "latency" | "disk_queue" => "disk",
                 "gpu" => "gpu",
                 "cores" => "cores",
-                "net" => "network",
+                "net" | "net_in" | "net_out" => "network",
                 _ => "extra",
             };
             if category == group {
@@ -275,6 +281,14 @@ impl Monitor {
             network_mb: {
                 let a = q.array("net");
                 (!a.is_empty()).then(|| a.values().sum::<f64>() / 1048576.0)
+            },
+            network_in_mb: {
+                let a = q.array("net_in");
+                (!a.is_empty()).then(|| a.values().sum::<f64>() / 1048576.)
+            },
+            network_out_mb: {
+                let a = q.array("net_out");
+                (!a.is_empty()).then(|| a.values().sum::<f64>() / 1048576.)
             },
             ..Default::default()
         };

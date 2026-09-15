@@ -141,6 +141,17 @@ pub fn worker(
                 1
             };
             let report = match command {
+                Command::PickProcesses => {
+                    match crate::native::NativeMonitor::new().and_then(|mut m| m.sample(0.)) {
+                        Ok(s) => emit(hwnd, &action_events, Event::ProcessChoices(s.processes)),
+                        Err(e) => emit(
+                            hwnd,
+                            &action_events,
+                            Event::Structured(3, crate::model::Report::error(e)),
+                        ),
+                    }
+                    continue;
+                }
                 Command::Metadata(pid, created) => {
                     let metadata =
                         probe_data("--metadata-probe", pid, created).unwrap_or_else(|e| {
@@ -419,7 +430,11 @@ pub fn worker(
                                                 .map(|v| v.min(100.0));
                                         }
                                     }
-                                    "network" => s.network_mb = extra.network_mb,
+                                    "network" => {
+                                        s.network_mb = extra.network_mb;
+                                        s.network_in_mb = extra.network_in_mb;
+                                        s.network_out_mb = extra.network_out_mb;
+                                    }
                                     "cores" => {
                                         s.cores = extra.cores.clone();
                                         if !s.cores.is_empty() {
