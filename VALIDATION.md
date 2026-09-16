@@ -1,5 +1,15 @@
 # Validation evidence
 
+## Table sorting and pressure emphasis — 2026-09-16
+
+- Added comparator coverage for decimal metrics, grouped integers, byte units,
+  natural process names/IP strings, direction toggling and missing values last.
+- Native live-capture verification: PID header sorted ascending and descending;
+  direction indicators and bold accent Pressure values were visually inspected.
+- Report sorting is applied consistently to display and selected-row actions;
+  process picker resolves the selected PID rather than indexing the unsorted list.
+- Formatting, clippy, 20 tests and optimized release smoke validation pass.
+
 ## Capture control stability — 2026-09-16
 
 - Removed full layout/child repaint from recurring sample and metadata events;

@@ -4,6 +4,13 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
 
 ## [0.3.0] - 2026-09-15
 
+- Make every table column sortable in both directions with a visible direction
+  indicator, numeric/unit-aware values, natural names and missing values last.
+- Preserve sort choices during live updates; keep process-picker and folder
+  actions attached to the displayed row after sorting.
+- Emphasize the Pressure column with a wider header, bold accent-colored values
+  and magnitude bars. Contributor ranking chooses the cohort; headers reorder it.
+
 - Keep buttons, edits and dropdowns stationary during capture updates: telemetry
   and executable metadata no longer rerun the complete native control layout.
 - Preserve overview-table visibility while samples arrive on other pages.

@@ -14,6 +14,7 @@ mod model;
 mod native;
 mod network;
 mod open_files;
+mod sorting;
 mod theme;
 mod traffic;
 mod ui;
@@ -111,6 +112,8 @@ struct App {
     pid: HWND,
     slow: HWND,
     sort: HWND,
+    contributor_sort: sorting::Sort,
+    report_sorts: HashMap<Vec<String>, sorting::Sort>,
     controls: Vec<(HWND, i32, i32, i32, i32)>,
     font: HFONT,
     page: usize,
@@ -570,14 +573,14 @@ unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
                 Some(LPARAM(LVNI_SELECTED as isize)),
             )
             .0;
-            let column = app
-                .presentation
+            let report = ui::display_report(app);
+            let column = report
                 .columns
                 .iter()
                 .position(|c| c == "Path" || c == "Executable");
             let path = usize::try_from(selected)
                 .ok()
-                .and_then(|row| app.presentation.rows.get(row))
+                .and_then(|row| report.rows.get(row))
                 .and_then(|row| column.and_then(|col| row.get(col)))
                 .cloned();
             app.detail_pid
@@ -661,6 +664,19 @@ unsafe fn command(app: &mut App, hwnd: HWND, id: usize) {
             None
         }
         109 => {
+            let column = match SendMessageW(app.sort, CB_GETCURSEL, None, None).0 {
+                1 => 2,
+                2 => 3,
+                3 => 5,
+                4 => 6,
+                5 => 8,
+                6 => 7,
+                _ => 9,
+            };
+            app.contributor_sort = sorting::Sort {
+                column,
+                descending: true,
+            };
             update_table(app);
             None
         }
@@ -968,6 +984,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 return result;
             }
             let notification = &*(lparam.0 as *const NMHDR);
+            if notification.code == LVN_COLUMNCLICK
+                && [app.table, app.report, app.detail].contains(&notification.hwndFrom)
+            {
+                let column = (*(lparam.0 as *const NMLISTVIEW)).iSubItem;
+                if column >= 0 {
+                    ui::sort_column(app, notification.hwndFrom, column as usize);
+                }
+                return LRESULT(0);
+            }
             if app.process_picker
                 && notification.hwndFrom == app.detail
                 && (notification.code == NM_DBLCLK
@@ -981,7 +1006,16 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     Some(LPARAM(LVNI_SELECTED as isize)),
                 )
                 .0;
-                if let Some(p) = app.process_choices.get(row as usize) {
+                let picked_pid = ui::display_report(app)
+                    .rows
+                    .get(row as usize)
+                    .and_then(|r| r.get(1))
+                    .and_then(|v| v.parse::<u32>().ok());
+                if let Some(p) = app
+                    .process_choices
+                    .iter()
+                    .find(|p| Some(p.pid) == picked_pid)
+                {
                     let (pid, created) = (p.pid, p.created_ticks);
                     app.process_picker = false;
                     app.detail_pid = Some(pid);
@@ -1704,6 +1738,11 @@ fn main() {
             pid: HWND::default(),
             slow: HWND::default(),
             sort: HWND::default(),
+            contributor_sort: sorting::Sort {
+                column: 9,
+                descending: true,
+            },
+            report_sorts: HashMap::new(),
             controls: Vec::new(),
             font: make_font(-11, 400, theme::font_face()),
             page: 0,

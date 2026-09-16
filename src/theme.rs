@@ -172,7 +172,7 @@ pub unsafe fn apply(app: &App, hwnd: HWND) {
             SetWindowLongW(
                 header,
                 GWL_STYLE,
-                GetWindowLongW(header, GWL_STYLE) & !(HDS_BUTTONS as i32),
+                GetWindowLongW(header, GWL_STYLE) | HDS_BUTTONS as i32,
             );
         }
     }
@@ -719,6 +719,7 @@ pub unsafe fn custom_draw(app: &App, lparam: LPARAM) -> Option<LRESULT> {
                         },
                     );
                 }
+                let pressure = table == app.table && column == 9;
                 let primary = if app.page == 1 && table == app.report {
                     column == 1
                 } else {
@@ -728,6 +729,8 @@ pub unsafe fn custom_draw(app: &App, lparam: LPARAM) -> Option<LRESULT> {
                     draw.nmcd.hdc,
                     if selected && p.high_contrast {
                         COLORREF(GetSysColor(COLOR_HIGHLIGHTTEXT))
+                    } else if pressure && !p.high_contrast {
+                        if p.dark { metric_colors()[0] } else { p.accent }
                     } else if primary || selected {
                         p.text
                     } else {
@@ -737,7 +740,7 @@ pub unsafe fn custom_draw(app: &App, lparam: LPARAM) -> Option<LRESULT> {
                 SetBkMode(draw.nmcd.hdc, TRANSPARENT);
                 let old = SelectObject(
                     draw.nmcd.hdc,
-                    if primary {
+                    if primary || pressure {
                         primary_font(app.scale)
                     } else {
                         app.font
@@ -1190,6 +1193,41 @@ unsafe extern "system" fn header_subclass(
             rect.left += inset;
             rect.right -= inset;
             let n = text.iter().position(|v| *v == 0).unwrap_or(text.len());
+            let pressure = String::from_utf16_lossy(&text[..n]) == "Pressure";
+            SelectObject(
+                dc,
+                if pressure {
+                    primary_font(GetDpiForWindow(hwnd) as f64 / 96.)
+                } else {
+                    HFONT(current_font as *mut _)
+                }
+                .into(),
+            );
+            SetTextColor(
+                dc,
+                if pressure && !p.high_contrast {
+                    if p.dark { metric_colors()[0] } else { p.accent }
+                } else {
+                    p.muted
+                },
+            );
+            if item.fmt.0 & (HDF_SORTUP.0 | HDF_SORTDOWN.0) != 0 {
+                let mut arrow = rect;
+                arrow.left =
+                    (arrow.right - (12 * GetDpiForWindow(hwnd) / 96) as i32).max(arrow.left);
+                let mut glyph = wide(if item.fmt.0 & HDF_SORTDOWN.0 != 0 {
+                    "▾"
+                } else {
+                    "▴"
+                });
+                DrawTextW(
+                    dc,
+                    &mut glyph[..1],
+                    &mut arrow,
+                    DT_SINGLELINE | DT_VCENTER | DT_CENTER,
+                );
+                rect.right = arrow.left - 2;
+            }
             DrawTextW(
                 dc,
                 &mut text[..n],

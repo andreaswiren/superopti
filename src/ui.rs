@@ -180,7 +180,7 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
         ("GPU %", 72),
         ("Threads", 72),
         ("Handles", 80),
-        ("Score", 66),
+        ("Pressure", 96),
         ("Observed cores", 124),
     ]
     .iter()
@@ -421,7 +421,82 @@ pub unsafe fn init(app: &mut App, hwnd: HWND) {
     layout(app, hwnd);
 }
 
-fn display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
+pub fn display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
+    let mut report = raw_display_report(app);
+    if let Some(sort) = app.report_sorts.get(&report.columns) {
+        report.to_mut().rows.sort_by(|a, b| {
+            sort.compare(
+                a.get(sort.column).map(String::as_str).unwrap_or(""),
+                b.get(sort.column).map(String::as_str).unwrap_or(""),
+            )
+        });
+    }
+    report
+}
+
+pub unsafe fn sort_column(app: &mut App, table: HWND, column: usize) {
+    if table == app.table {
+        app.contributor_sort = app.contributor_sort.toggled(column);
+        update_table(app);
+    } else {
+        let columns = display_report(app).columns.clone();
+        if column >= columns.len() {
+            return;
+        }
+        let next = app
+            .report_sorts
+            .get(&columns)
+            .map(|sort| sort.toggled(column))
+            .unwrap_or(crate::sorting::Sort {
+                column,
+                descending: false,
+            });
+        app.report_sorts.insert(columns, next);
+        update_report(app);
+        update_file_actions(app);
+    }
+}
+
+unsafe fn sort_indicator(table: HWND, sort: Option<crate::sorting::Sort>) {
+    let header = HWND(SendMessageW(table, LVM_GETHEADER, None, None).0 as *mut _);
+    let count = SendMessageW(header, HDM_GETITEMCOUNT, None, None).0;
+    let mut changed = false;
+    for column in 0..count {
+        let mut item = HDITEMW {
+            mask: HDI_FORMAT,
+            ..Default::default()
+        };
+        SendMessageW(
+            header,
+            HDM_GETITEMW,
+            Some(WPARAM(column as usize)),
+            Some(LPARAM(&mut item as *mut _ as isize)),
+        );
+        let previous = item.fmt.0;
+        item.fmt.0 &= !(HDF_SORTUP.0 | HDF_SORTDOWN.0);
+        if let Some(sort) = sort.filter(|s| s.column == column as usize) {
+            item.fmt.0 |= if sort.descending {
+                HDF_SORTDOWN.0
+            } else {
+                HDF_SORTUP.0
+            };
+        }
+        if item.fmt.0 != previous {
+            changed = true;
+            SendMessageW(
+                header,
+                HDM_SETITEMW,
+                Some(WPARAM(column as usize)),
+                Some(LPARAM(&item as *const _ as isize)),
+            );
+        }
+    }
+    if changed {
+        let _ = InvalidateRect(Some(header), None, false);
+    }
+}
+
+fn raw_display_report(app: &App) -> std::borrow::Cow<'_, model::Report> {
     if app.page == 3
         && !app.process_picker
         && !app.detail_pending
@@ -633,7 +708,7 @@ pub unsafe fn layout(app: &App, hwnd: HWND) {
         geometry(width)
     };
     let table_y = if app.compact { 286 } else { 284 };
-    let widths = [160, 62, 68, 88, 96, 94, 68, 76, 84, 68, 124];
+    let widths = [160, 62, 68, 88, 96, 94, 68, 76, 84, 96, 124];
     let table_was_visible = IsWindowVisible(app.table).as_bool();
     let sizing_header = HWND(SendMessageW(app.table, LVM_GETHEADER, None, None).0 as *mut _);
     SendMessageW(app.table, WM_SETREDRAW, Some(WPARAM(0)), None);
@@ -1081,6 +1156,7 @@ pub unsafe fn update_report(app: &App) {
             }
         }
         SendMessageW(table, WM_SETREDRAW, Some(WPARAM(1)), None);
+        sort_indicator(table, app.report_sorts.get(&report.columns).copied());
         let _ = InvalidateRect(Some(table), None, false);
     }
     size_report_columns(app);
@@ -1195,6 +1271,23 @@ pub unsafe fn update_table(app: &mut App) {
         .unwrap_or(-1.0)
     };
     rows.sort_by(|a, b| key(b).total_cmp(&key(a)));
+    // Rank chooses the contributor cohort; headers reorder that displayed cohort.
+    rows.truncate(if app.compact { 3 } else { 10 });
+    let sort = app.contributor_sort;
+    let value = |p: &metrics::Process| match sort.column {
+        0 => p.name.clone(),
+        1 => p.pid.to_string(),
+        2 => fmt(p.cpu, ""),
+        3 => fmt(p.ram_mb, ""),
+        4 => fmt(p.commit_mb, ""),
+        5 => fmt(p.io_mb, ""),
+        6 => fmt(p.gpu, ""),
+        7 => fmt(p.threads, ""),
+        8 => fmt(p.handles, ""),
+        9 => p.score.to_string(),
+        _ => observed_cores(app, p.pid, p.created_ticks),
+    };
+    rows.sort_by(|a, b| sort.compare(&value(a), &value(b)));
     SendMessageW(app.table, WM_SETREDRAW, Some(WPARAM(0)), None);
     SendMessageW(app.table, LVM_DELETEALLITEMS, None, None);
     for (index, p) in rows
@@ -1268,6 +1361,7 @@ pub unsafe fn update_table(app: &mut App) {
         let _ = ShowWindow(app.table, SW_HIDE);
     }
     let _ = InvalidateRect(Some(app.table), None, false);
+    sort_indicator(app.table, Some(app.contributor_sort));
 }
 
 pub unsafe fn selected_pid(app: &App) -> Option<u32> {
@@ -2580,13 +2674,13 @@ pub unsafe fn update_file_actions(app: &App) {
         Some(LPARAM(LVNI_SELECTED as isize)),
     )
     .0;
-    let eligible = app
-        .presentation
+    let report = display_report(app);
+    let eligible = report
         .columns
         .iter()
         .position(|c| c == "Path" || c == "Executable")
         .and_then(|column| {
-            app.presentation
+            report
                 .rows
                 .get(selected as usize)
                 .and_then(|row| row.get(column))
