@@ -1082,7 +1082,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         EVENT => {
+            let mut layout_changed = false;
             while let Ok(event) = app.rx.try_recv() {
+                // Telemetry and icon arrivals update data, not control geometry.
+                // Repositioning native edits/combos on every sample exposes their
+                // intermediate native painting and resets text/selection offsets.
+                layout_changed |= match &event {
+                    Event::Sample(_) => app.history.is_empty(),
+                    Event::Metadata(..) | Event::ActionStatus(_) => false,
+                    Event::TrafficUpdate(_) => false,
+                    _ => true,
+                };
                 match event {
                     Event::CoreObservation(report) => {
                         app.core_pending = false;
@@ -1175,7 +1185,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         app.net_active = active;
                         app.net_pending = false;
                         tray(hwnd, NIM_MODIFY, app.active || app.net_active);
-                        ui::layout(app, hwnd);
                     }
                     Event::Metadata(pid, created, metadata) => {
                         let key = (pid, created);
@@ -1192,6 +1201,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         let _ = InvalidateRect(Some(hwnd), None, false);
                     }
                     Event::TrafficUpdate(report) => {
+                        let had_error = !app.traffic_error.is_empty();
                         if report.title == "Request failed" {
                             app.traffic_error = report
                                 .rows
@@ -1216,6 +1226,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                                 ui::update_report(app);
                             }
                         }
+                        layout_changed |= had_error != !app.traffic_error.is_empty();
                     }
                     Event::TrafficHistory(request, report) => {
                         if request == app.traffic_request && !app.traffic_follow {
@@ -1266,7 +1277,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     }
                 }
             }
-            ui::layout(app, hwnd);
+            if layout_changed {
+                ui::layout(app, hwnd);
+            } else {
+                // The parent is double buffered and clips child windows. Only
+                // graphs/status and explicitly updated tables need repainting.
+                let _ = InvalidateRect(Some(hwnd), None, false);
+            }
             for key in app.displayed_rows.clone() {
                 request_metadata(app, key);
             }

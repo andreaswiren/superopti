@@ -1,5 +1,15 @@
 # Validation evidence
 
+## Capture control stability — 2026-09-16
+
+- Removed full layout/child repaint from recurring sample and metadata events;
+  first-sample visibility, start/stop and structural events still update layout.
+- Inspected the native debug app during a live capture and typed a process search;
+  search focus and filtering work while metrics continue updating. Point-in-time
+  screenshots do not certify the absence of every transient display artifact.
+- Formatting, clippy with warnings denied, all 19 tests and optimized release
+  smoke validation pass. Diagnostic captures remain local.
+
 ## Scheduler observation — 2026-09-16
 
 - UX agent accepted the native idle contributor toolbar after two reviews: 28px

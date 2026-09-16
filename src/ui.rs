@@ -1170,6 +1170,7 @@ fn observed_cores(app: &App, pid: u32, created: Option<u64>) -> String {
 }
 pub unsafe fn update_table(app: &mut App) {
     let Some(s) = app.history.back() else { return };
+    let was_visible = IsWindowVisible(app.table).as_bool();
     let selected = selected_identity(app);
     let sort = SendMessageW(app.sort, CB_GETCURSEL, None, None).0;
     let mut rows: Vec<_> = s
@@ -1261,6 +1262,11 @@ pub unsafe fn update_table(app: &mut App) {
             .unwrap_or_default(),
     );
     SendMessageW(app.table, WM_SETREDRAW, Some(WPARAM(1)), None);
+    // WM_SETREDRAW(TRUE) adds WS_VISIBLE even when another page is open.
+    // Data refreshes must not reveal the overview table on top of that page.
+    if !was_visible {
+        let _ = ShowWindow(app.table, SW_HIDE);
+    }
     let _ = InvalidateRect(Some(app.table), None, false);
 }
 

@@ -4,6 +4,10 @@ Application versions follow Semantic Versioning; preview tags append CI run/atte
 
 ## [0.3.0] - 2026-09-15
 
+- Keep buttons, edits and dropdowns stationary during capture updates: telemetry
+  and executable metadata no longer rerun the complete native control layout.
+- Preserve overview-table visibility while samples arrive on other pages.
+
 - Add explicit five-second ETW process-to-logical-CPU observations with a limited
   UAC helper, identity checks, lost-event rejection, and deadline watchdog.
 - Display observed indexes in contributors and process details and include their
